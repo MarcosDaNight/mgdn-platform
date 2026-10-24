@@ -53,15 +53,18 @@ table inet mgdn_allowlist {
     flags interval
     ${elements:+elements = { $elements }}
   }
-  # SSH e DNS atendidos direto pelo host (docker-proxy)
+  # SSH e DNS atendidos direto pelo host (docker-proxy). Métricas (4000 Blocky,
+  # 9093 Alertmanager, 9100 node-exporter) nunca pela interface pública: só tailnet.
   chain input {
     type filter hook input priority filter - 10; policy accept;
     iifname "$iface" meta l4proto { tcp, udp } th dport { 22, 53 } ip saddr != @allowed drop
+    iifname "$iface" tcp dport { 4000, 9093, 9100 } drop
   }
-  # DNS publicado pelo Docker (após o DNAT)
+  # Portas publicadas pelo Docker (após o DNAT)
   chain forward {
     type filter hook forward priority filter - 10; policy accept;
     iifname "$iface" meta l4proto { tcp, udp } th dport 53 ip saddr != @allowed drop
+    iifname "$iface" tcp dport { 4000, 9093, 9100 } drop
   }
 }
 EOF

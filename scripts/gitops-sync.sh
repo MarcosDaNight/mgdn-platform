@@ -92,6 +92,15 @@ validate() {
   if has_service prometheus; then
     compose run --rm --no-deps -T --entrypoint promtool prometheus \
       check config /etc/prometheus/prometheus.yml >/dev/null || return 1
+    compose run --rm --no-deps -T --entrypoint promtool -w /etc/prometheus/tests prometheus \
+      test rules slo_test.yml >/dev/null || return 1
+  fi
+  if has_service alertmanager; then
+    compose run --rm --no-deps -T --entrypoint amtool alertmanager \
+      check-config /etc/alertmanager/alertmanager.yml >/dev/null || return 1
+  fi
+  if has_service blackbox; then
+    compose run --rm --no-deps -T blackbox --config.file=/etc/blackbox/blackbox.yml --config.check >/dev/null 2>&1 || return 1
   fi
   if has_service headscale; then
     # Diretórios temporários: o configtest abre o banco e não deve tocar no real.
@@ -124,6 +133,14 @@ apply() {
   systemctl start mgdn-allowlist.service
 
   compose pull --quiet
+
+  # URL secreta do ntfy para o Alertmanager (ADR 0009): arquivo fora do repo,
+  # legível pelo usuário do container (nobody). Sem URL, os alertas não saem.
+  if has_service alertmanager; then
+    install -d -m 0750 -g 65534 /etc/mgdn-platform/alertmanager
+    printf '%s\n' "${ALERT_NTFY_URL:-http://127.0.0.1:9/alertas-desativados}" |
+      install -m 0640 -g 65534 /dev/stdin /etc/mgdn-platform/alertmanager/ntfy-url
+  fi
 
   # VM nova (primeiro deploy): restaura o Headscale do backup mais recente antes de
   # subi-lo, para os aparelhos seguirem na tailnet sem novo registro (ADR 0006).
