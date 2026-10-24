@@ -51,7 +51,7 @@ tailnet-key: ## Chave de uso único (30 min) para `tailscale up --authkey` em Li
 
 # --- Operação -------------------------------------------------------------------
 
-.PHONY: ssh tunnel grafana-password status allowlist sync logs querylog test
+.PHONY: ssh tunnel grafana-password status allowlist sync logs querylog test backup backups
 ssh: ## SSH na VM (HOST=mgdn-primary ou mgdn-secondary, pela tailnet)
 	@$(SSH)
 
@@ -82,6 +82,12 @@ logs: ## Logs do Blocky (SERVICE=headscale etc.)
 
 querylog: ## Últimos domínios bloqueados (N=50)
 	@$(SSH) 'sudo sh -c "cat /var/lib/docker/volumes/mgdn_blocky-logs/_data/*.log" | awk -F"\t" "\$$5 ~ /BLOCKED/ {print \$$1, \$$2, \$$6}" | tail -n $(or $(N),50)'
+
+backup: ## Faz um backup do Headscale agora
+	@$(SSH) 'sudo systemctl start mgdn-backup.service; sudo journalctl -u mgdn-backup -n 3 -o cat --no-pager'
+
+backups: ## Lista os backups mais recentes no bucket imutável (N=10)
+	@$(SSH) 'sudo bash -c ". /etc/mgdn-platform/env; . /opt/mgdn-platform/scripts/s3.sh; s3_list headscale/ | tail -n $(or $(N),10)"'
 
 test: ## Testa resolução e bloqueio nas duas VMs (IPs públicos, de casa) e pela tailnet
 	@cd $(TFDIR) && $(ENV_ABS) p=$$($(TF) output -raw primary_ip) && s2=$$($(TF) output -raw secondary_ip 2>/dev/null); \

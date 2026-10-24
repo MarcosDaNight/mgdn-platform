@@ -53,6 +53,7 @@ flowchart LR
 | [0003](docs/adr/0003-tailnet-com-headscale.md) | Tailnet com Headscale, com o Blocky como DNS dela |
 | [0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md) | Evoluir o blocky-cloud-dns em vez de recomeçar |
 | [0005](docs/adr/0005-dns-secundario-em-outra-regiao.md) | DNS secundário em outra região |
+| [0006](docs/adr/0006-backup-imutavel-e-restore-drill.md) | Backup imutável do Headscale e restore drill mensal |
 
 ## Orçamento
 
@@ -74,6 +75,7 @@ deploy/                    o que roda nas VMs (fonte da verdade do GitOps)
   common/blocky/           configuração do Blocky, compartilhada pelos papéis
   primary/compose.yaml     headscale, blocky, prometheus, node-exporter, grafana
   primary/headscale/       configuração do Headscale (DNS da tailnet = Blocky)
+  primary/backup/          chave pública age que cifra os backups
   secondary/compose.yaml   só o Blocky (DNS secundário em br-se1)
   systemd/                 timers: gitops, healthcheck, allowlist, limpeza semanal
 scripts/
@@ -81,6 +83,8 @@ scripts/
   tailnet-join.sh          registra a VM principal na tailnet (100.64.0.1)
   allowlist.sh             porta 53 pública só para o IP de casa (DDNS)
   healthcheck.sh           DNS, bloqueio, tráfego de casa, disco, Headscale, DNS da tailnet
+  backup.sh / restore.sh   backup cifrado e imutável do Headscale; restore automático no boot
+  s3.sh                    cliente S3 mínimo (curl --aws-sigv4)
 docs/adr/                  decisões de arquitetura
 ```
 
@@ -97,6 +101,7 @@ docs/adr/                  decisões de arquitetura
 | `make allowlist` | IP de casa liberado na porta 53 e últimas trocas |
 | `make querylog` / `make logs` | domínios bloqueados / logs dos containers |
 | `make tunnel` | Grafana, Prometheus e API do Blocky em `localhost` |
+| `make backup` / `make backups` | backup do Headscale agora / lista os backups no bucket |
 
 ### Colocar um aparelho na tailnet
 
@@ -120,6 +125,25 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
   `make apply` em até 30 min.
 - Cada VM pinga o próprio check no healthchecks.io (`healthcheck_url` e
   `secondary_healthcheck_url`).
+
+### Backup e DR (ADR 0006)
+
+- **O que é salvo:** banco e chave Noise do Headscale, cache do certificado e o estado do
+  Tailscale da VM principal. Diariamente às 03:15, cifrado com `age`, num bucket com
+  **object lock de 30 dias** em br-se1. Nem as credenciais do dono apagam um backup recente.
+- **VM principal recriada:** o primeiro deploy restaura o backup mais recente antes de subir
+  o Headscale. Os aparelhos seguem na tailnet e a VM volta como `100.64.0.1`.
+- **Restore drill:** todo dia 2 o workflow `dr-drill` restaura o backup num runner
+  descartável, confere os nós e abre uma issue `dr-drill` com RTO e RPO. Uma falha fica
+  aberta e notifica. Para rodar fora de hora: *Actions → dr-drill → Run workflow*.
+- **Restore manual** (ex.: voltar a um backup específico): na VM principal,
+  `sudo /opt/mgdn-platform/scripts/restore.sh --with-tailscale headscale/<AAAAMMDDTHHMMSSZ>.tar.gz.age`
+  com o Headscale parado (`docker compose stop headscale`), e depois `start`.
+- **Chave privada `age`:** guardada no gerenciador de senhas. Sem ela, nenhum backup pode
+  ser lido.
+- **VM secundária recriada:** ela não tem estado, então entra na tailnet como um nó novo, com
+  outro IP. Remova o nó antigo (`make tailnet-nodes`, depois `headscale nodes delete -i <id>`)
+  e atualize o IP dela em `dns.nameservers.global` no Headscale (PR).
 
 ### SSH de emergência (break-glass)
 
