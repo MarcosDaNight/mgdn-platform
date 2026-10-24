@@ -57,3 +57,16 @@ Alternativas descartadas:
 - A **VM secundária** não tem estado nem backup. Se for recriada, entra na tailnet como um
   nó novo, com outro IP, e o DNS da tailnet precisa ser atualizado no Headscale (runbook no
   README).
+
+## Resultado da validação (24/10/2026)
+
+- **Restore drill:** RTO 6 s, RPO 0 h.
+- **Recriação real da VM principal:** 172 s do apply até o Headscale servir o estado
+  restaurado; RPO de 6 min; nenhum minuto sem DNS (a secundária atendeu); nenhum aparelho
+  registrado de novo.
+- **Achado:** a VM destruída de forma abrupta deixa conexões TCP meio abertas. Clientes
+  Linux com conexão de controle longa levaram ~15 min para reconectar (o túnel de dados não
+  caiu). Mitigação: `make headscale-drain` antes de recriar, que faz um backup novo e para o
+  Headscale de forma limpa.
+- **Bug evitado na revisão do plano:** pacotes adicionados ao cloud-init compartilhado
+  recriariam as duas VMs juntas. Pacotes por host passaram a ser `extra_packages`.
