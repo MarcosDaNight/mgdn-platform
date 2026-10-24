@@ -50,8 +50,8 @@ tailnet-register: ## Aprova um aparelho que mostrou "headscale auth register --a
 tailnet-key: ## Chave de uso único (30 min) para `tailscale up --authkey` em Linux
 	@$(SSH) '$(HS) preauthkeys create --user $$($(HS) users list -n platform -o json | python3 -c "import json,sys;print(json.load(sys.stdin)[0][\"id\"])") --expiration 30m'
 
-headscale-drain: ## Antes de recriar a VM principal: backup novo e Headscale parado de forma limpa
-	@$(SSH) 'sudo systemctl start mgdn-backup.service && sudo journalctl -u mgdn-backup -n 1 -o cat --no-pager && $(COMPOSE) stop headscale'
+headscale-drain: ## Antes de recriar a VM principal: pausa o GitOps, backup novo e Headscale parado de forma limpa
+	@$(SSH) 'sudo systemctl stop mgdn-gitops.timer && sudo systemctl start mgdn-backup.service && sudo journalctl -u mgdn-backup -n 1 -o cat --no-pager && $(COMPOSE) stop headscale'
 	@echo "Headscale parado: os clientes reconectam assim que a VM nova subir. Agora: make apply"
 
 # --- Operação -------------------------------------------------------------------

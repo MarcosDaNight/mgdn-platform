@@ -39,7 +39,8 @@ jobs:
           set -euo pipefail
           t0=$(date +%s)
           data="$RUNNER_TEMP/headscale"
-          restored=$(scripts/restore.sh --target "$data" | sed -n 's/^restored=//p')
+          vwdata="$RUNNER_TEMP/vaultwarden"
+          restored=$(scripts/restore.sh --target "$data" --vw-target "$vwdata" | sed -n 's/^restored=//p')
 
           # Mesma config de produção, mas local: HTTP em 8080 e sem ACME.
           sed -e 's#^server_url: .*#server_url: http://127.0.0.1:8080#' \
@@ -52,9 +53,19 @@ jobs:
             -v "$data:/var/lib/headscale" "$image" serve >/dev/null
           for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8080/health && break; sleep 2; done
           curl -fsS -o /dev/null http://127.0.0.1:8080/health
-          t1=$(date +%s)
 
           nodes=$(docker exec hs headscale nodes list -o json | jq -r '.[].given_name' | sort | xargs)
+
+          # Vaultwarden (ADR 0010): sobe o app com o backup e confere que responde.
+          vw="ausente no backup"
+          if [[ -f "$vwdata/db.sqlite3" ]]; then
+            vwimage=$(docker compose -f deploy/primary/compose.yaml config --format json | jq -r '.services.vaultwarden.image')
+            docker run -d --name vw -p 127.0.0.1:8081:80 -e DOMAIN=http://127.0.0.1:8081 -v "$vwdata:/data" "$vwimage" >/dev/null
+            for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8081/alive && break; sleep 2; done
+            curl -fsS -o /dev/null http://127.0.0.1:8081/alive
+            vw="ok ($(sqlite3 "$vwdata/db.sqlite3" 'select count(*) from users;') usuário(s), $(sqlite3 "$vwdata/db.sqlite3" 'select count(*) from ciphers;') item(ns))"
+          fi
+          t1=$(date +%s)
           for n in $EXPECTED_NODES; do
             grep -qw "$n" <<<"$nodes" || { echo "::error::nó $n ausente no backup restaurado"; exit 1; }
           done
@@ -75,6 +86,7 @@ jobs:
             echo "rto=$((t1 - t0))"
             echo "rpo_h=$(( (t1 - backup_epoch) / 3600 ))"
             echo "nodes=$nodes"
+            echo "vaultwarden=$vw"
             echo "backups=$count (mais antigo: ${oldest_d} dias)"
           } >>"$GITHUB_OUTPUT"
 
@@ -88,6 +100,7 @@ jobs:
           RPO: ${{ steps.drill.outputs.rpo_h }}
           NODES: ${{ steps.drill.outputs.nodes }}
           BACKUPS: ${{ steps.drill.outputs.backups }}
+          VAULTWARDEN: ${{ steps.drill.outputs.vaultwarden }}
         run: |
           month=$(TZ=America/Sao_Paulo date +%Y-%m)
           if [[ "$OUTCOME" == "success" ]]; then
@@ -95,8 +108,8 @@ jobs:
           else
             title="DR drill $month: FALHOU"
           fi
-          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n| Backups no bucket | %s |\n| Execução | %s |\n' \
-            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" "${BACKUPS:-—}" \
+          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale e Vaultwarden respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n| Vaultwarden | %s |\n| Backups no bucket | %s |\n| Execução | %s |\n' \
+            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" "${VAULTWARDEN:-—}" "${BACKUPS:-—}" \
             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
           echo "$body" >>"$GITHUB_STEP_SUMMARY"
           gh label create dr-drill --color 5319E7 --description "Restore drill mensal" --force >/dev/null

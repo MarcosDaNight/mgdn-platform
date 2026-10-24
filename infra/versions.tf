@@ -6,6 +6,10 @@ terraform {
       source  = "magalucloud/mgc"
       version = "~> 0.55"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.28"
+    }
   }
 
   # State remoto no Object Storage da Magalu (API S3), bucket privado e versionado
@@ -40,4 +44,9 @@ provider "mgc" {
   alias   = "se1"
   region  = "br-se1"
   api_key = var.mgc_api_key
+}
+
+# DNS do domínio mgdn.com.br (ADR 0010). O token só edita o DNS desta zona.
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Restaura um backup do Headscale (ADR 0006).
 #
-# Uso: restore.sh [--if-empty] [--with-tailscale] [--target DIR] [CHAVE]
-#   --if-empty        só restaura se DIR não tiver db.sqlite (boot de uma VM nova)
+# Uso: restore.sh [--if-empty] [--with-tailscale] [--target DIR] [--vw-target DIR] [CHAVE]
+#   --if-empty        só restaura os componentes cujo destino está vazio (VM nova)
 #   --with-tailscale  também restaura o tailscaled.state desta VM, que volta à
 #                     tailnet como o mesmo nó (mesmo IP), sem novo registro
-#   --target          destino (padrão: volume do Headscale na VM)
+#   --target          destino do Headscale (padrão: volume na VM)
+#   --vw-target       destino do Vaultwarden (padrão: volume na VM)
 #   CHAVE             objeto no bucket (padrão: o backup mais recente)
 #
 # Na VM lê /etc/mgdn-platform/env; no CI as mesmas variáveis vêm do ambiente.
@@ -24,6 +25,7 @@ log() { echo "[restore] $*" >&2; }
 if_empty=false
 with_tailscale=false
 target=/var/lib/docker/volumes/mgdn_headscale-data/_data
+vw_target=/var/lib/docker/volumes/mgdn_vaultwarden-data/_data
 key=""
 while (($#)); do
   case "$1" in
@@ -33,6 +35,10 @@ while (($#)); do
     target="$2"
     shift
     ;;
+  --vw-target)
+    vw_target="$2"
+    shift
+    ;;
   *) key="$1" ;;
   esac
   shift
@@ -40,9 +46,14 @@ done
 
 : "${BACKUP_BUCKET:?}" "${BACKUP_AGE_IDENTITY:?}"
 
-if $if_empty && [[ -f "$target/db.sqlite" ]]; then
-  log "$target já tem db.sqlite; nada a restaurar"
-  exit 0
+need_hs=true need_vw=true
+if $if_empty; then
+  [[ ! -f "$target/db.sqlite" ]] || need_hs=false
+  [[ ! -f "$vw_target/db.sqlite3" ]] || need_vw=false
+  if ! $need_hs && ! $need_vw; then
+    log "Headscale e Vaultwarden já têm dados; nada a restaurar"
+    exit 0
+  fi
 fi
 
 if [[ -z "$key" ]]; then
@@ -62,13 +73,23 @@ trap 'rm -rf "$work"' EXIT
 
 s3_get "$key" "$work/backup.age"
 age -d -i "$work/identity" "$work/backup.age" | tar -C "$work" -xzf -
-[[ "$(sqlite3 "$work/headscale/db.sqlite" 'PRAGMA integrity_check;')" == "ok" ]]
 
-mkdir -p "$target"
-cp -a "$work/headscale/." "$target/"
-log "OK: $key restaurado em $target"
+if $need_hs; then
+  [[ "$(sqlite3 "$work/headscale/db.sqlite" 'PRAGMA integrity_check;')" == "ok" ]]
+  mkdir -p "$target"
+  cp -a "$work/headscale/." "$target/"
+  log "OK: Headscale de $key restaurado em $target"
+fi
 
-if $with_tailscale && [[ -f "$work/tailscale/tailscaled.state" ]]; then
+# Backups anteriores ao Vaultwarden não têm este diretório.
+if $need_vw && [[ -f "$work/vaultwarden/db.sqlite3" ]]; then
+  [[ "$(sqlite3 "$work/vaultwarden/db.sqlite3" 'PRAGMA integrity_check;')" == "ok" ]]
+  mkdir -p "$vw_target"
+  cp -a "$work/vaultwarden/." "$vw_target/"
+  log "OK: Vaultwarden de $key restaurado em $vw_target"
+fi
+
+if $with_tailscale && $need_hs && [[ -f "$work/tailscale/tailscaled.state" ]]; then
   systemctl stop tailscaled
   install -D -m 0600 "$work/tailscale/tailscaled.state" /var/lib/tailscale/tailscaled.state
   systemctl start tailscaled

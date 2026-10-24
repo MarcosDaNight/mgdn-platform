@@ -25,6 +25,15 @@ bootstrapDns:
 
 connectIPVersion: v4
 
+# Nomes só da tailnet (ADR 0010): existem apenas aqui, não no DNS público. Quem usa o
+# Blocky pela tailnet resolve para o IP da principal; para o resto da internet o nome
+# não existe. O certificado sai por DNS-01, sem precisar de registro público.
+customDNS:
+  customTTL: 5m
+  filterUnmappedTypes: true
+  mapping:
+    vault.mgdn.com.br: 100.64.0.1
+
 blocking:
   denylists:
     ads:

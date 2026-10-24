@@ -37,11 +37,14 @@ module "primary" {
   ssh_key_name = var.ssh_key_name
   repo_url     = var.repo_url
   repo_branch  = var.repo_branch
-  env          = merge(local.common_env, local.backup_env, { ALERT_NTFY_URL = var.alert_ntfy_url })
+  env = merge(local.common_env, local.backup_env, {
+    ALERT_NTFY_URL       = var.alert_ntfy_url
+    CLOUDFLARE_DNS_TOKEN = var.cloudflare_api_token
+  })
 
+  # Certificados por DNS-01/TLS-ALPN no Traefik: a porta 80 não é mais necessária.
   public_ports = merge(local.dns_ports, local.ssh_port, {
-    acme  = { protocol = "tcp", port = 80, description = "ACME HTTP-01 (Let's Encrypt)" }
-    https = { protocol = "tcp", port = 443, description = "Headscale (autenticado)" }
+    https = { protocol = "tcp", port = 443, description = "Traefik: Headscale (autenticado) e apps da tailnet" }
   })
 
   # Backup e restore do Headscale (ADR 0006).

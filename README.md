@@ -57,6 +57,7 @@ flowchart LR
 | [0007](docs/adr/0007-rotacao-dos-backups.md) | Rotação dos backups sem lifecycle do provedor |
 | [0008](docs/adr/0008-cadeia-de-suprimentos.md) | Cadeia de suprimentos: digests fixos e varredura das imagens |
 | [0009](docs/adr/0009-slo-e-alertas.md) | SLO do DNS com orçamento de erro e alertas no celular |
+| [0010](docs/adr/0010-dominio-proprio-traefik-e-vaultwarden.md) | Domínio próprio, Traefik como borda HTTPS e Vaultwarden só na tailnet |
 
 ## Orçamento
 
@@ -73,11 +74,13 @@ flowchart LR
 ```
 infra/                     Terraform (state remoto no Object Storage da Magalu)
   main.tf                  hosts da plataforma e import do IP herdado do v1
+  dns.tf                   zona mgdn.com.br na Cloudflare (registros como código)
   modules/host/            uma VM: security group, IP público protegido, cloud-init
 deploy/                    o que roda nas VMs (fonte da verdade do GitOps)
   common/blocky/           configuração do Blocky, compartilhada pelos papéis
   primary/compose.yaml     headscale, blocky, prometheus, node-exporter, grafana
   primary/headscale/       configuração do Headscale (DNS da tailnet = Blocky)
+  primary/traefik/         borda HTTPS: Headscale e apps da tailnet (certificados por DNS-01)
   primary/backup/          chave pública age que cifra os backups
   primary/blackbox/        sondas DNS (resolve e bloqueia) que alimentam o SLI
   primary/prometheus/      coleta, regras de SLO/alertas (rules/) e testes (tests/)

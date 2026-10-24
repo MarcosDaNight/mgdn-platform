@@ -1,9 +1,9 @@
 [Unit]
-Description=mgdn-platform: backup diário do Headscale
+Description=mgdn-platform: backup de hora em hora (Headscale e Vaultwarden)
 
 [Timer]
-OnCalendar=*-*-* 03:15
-RandomizedDelaySec=10min
+OnCalendar=hourly
+RandomizedDelaySec=5min
 Persistent=true
 
 [Install]

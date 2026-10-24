@@ -1,0 +1,44 @@
+# Traefik: porta de entrada HTTPS única da VM principal (ADR 0010). Termina TLS do
+# Headscale e dos apps da tailnet. Sem acesso ao socket do Docker: rotas declaradas
+# em arquivo (dynamic.yml).
+
+entryPoints:
+  websecure:
+    address: ":443"
+    transport:
+      respondingTimeouts:
+        # O Headscale mantém long-polls e conexões de controle por minutos.
+        readTimeout: 0s
+        idleTimeout: 0s
+  # Métricas e ping só na rede interna do compose (não publicado).
+  metrics:
+    address: ":8082"
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+certificatesResolvers:
+  # mgdn.com.br: DNS-01 na Cloudflare (funciona até para nomes só da tailnet).
+  cloudflare:
+    acme:
+      storage: /letsencrypt/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers: ["1.1.1.1:53", "9.9.9.9:53"]
+  # Nome antigo do DuckDNS (transição): TLS-ALPN-01 na própria 443.
+  alpn:
+    acme:
+      storage: /letsencrypt/acme.json
+      tlsChallenge: {}
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+
+ping:
+  entryPoint: metrics
+
+log:
+  level: INFO

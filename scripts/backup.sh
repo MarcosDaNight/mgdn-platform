@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Backup do Headscale (ADR 0006): snapshot consistente do SQLite, chave Noise,
-# cache ACME e o estado do cliente Tailscale desta VM, cifrados com a chave
+# Backup do Headscale (ADR 0006) e do Vaultwarden (ADR 0010): snapshots
+# consistentes dos SQLite, chave Noise, cache ACME, dados do Vaultwarden e o estado
+# do cliente Tailscale desta VM, cifrados com a chave
 # pública age do repositório e enviados ao bucket imutável (object lock) em br-se1.
 # Executado pelo mgdn-backup.timer.
 #
@@ -36,6 +37,21 @@ sqlite3 "$vol/db.sqlite" ".backup '$work/headscale/db.sqlite'"
 cp "$vol/noise_private.key" "$work/headscale/"
 [[ ! -d "$vol/cache" ]] || cp -r "$vol/cache" "$work/headscale/"
 dirs=(headscale)
+
+# Vaultwarden (ADR 0010): banco, chaves RSA dos tokens, anexos e sends.
+vw=/var/lib/docker/volumes/mgdn_vaultwarden-data/_data
+if [[ -f "$vw/db.sqlite3" ]]; then
+  mkdir "$work/vaultwarden"
+  sqlite3 "$vw/db.sqlite3" ".backup '$work/vaultwarden/db.sqlite3'"
+  [[ "$(sqlite3 "$work/vaultwarden/db.sqlite3" 'PRAGMA integrity_check;')" == "ok" ]]
+  for f in rsa_key.pem rsa_key.pub.pem config.json; do
+    [[ ! -f "$vw/$f" ]] || cp "$vw/$f" "$work/vaultwarden/"
+  done
+  for d in attachments sends; do
+    [[ ! -d "$vw/$d" ]] || cp -r "$vw/$d" "$work/vaultwarden/"
+  done
+  dirs+=(vaultwarden)
+fi
 if [[ -f /var/lib/tailscale/tailscaled.state ]]; then
   mkdir "$work/tailscale"
   cp /var/lib/tailscale/tailscaled.state "$work/tailscale/"
