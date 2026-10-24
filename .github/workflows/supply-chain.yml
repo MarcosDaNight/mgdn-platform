@@ -1,0 +1,79 @@
+name: supply-chain
+
+# Varredura de vulnerabilidades das imagens em uso (ADR 0008).
+# - Bloqueia: CRITICAL com correção disponível (o mantenedor já publicou o fix).
+# - Reporta sem bloquear: HIGH e CRITICAL na aba Security (SARIF).
+# - Semanal: CVEs novas aparecem em imagens que não mudaram.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 9 * * 1" # segunda, 06:00 BRT
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    runs-on: ubuntu-24.04
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: list
+        run: |
+          list=$(grep -hoE 'image: \S+' deploy/*/compose.yaml | awk '{print $2}' | sort -u | jq -R . | jq -sc .)
+          echo "list=$list" >>"$GITHUB_OUTPUT"
+          echo "$list" | jq -r '.[]'
+
+  scan:
+    needs: images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.images.outputs.list) }}
+    steps:
+      - name: Nome seguro para arquivos
+        id: name
+        run: echo "slug=$(echo '${{ matrix.image }}' | sed 's/@.*//; s#[/:]#-#g')" >>"$GITHUB_OUTPUT"
+
+      - name: Relatório (HIGH, CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-${{ steps.name.outputs.slug }}.sarif
+
+      - name: Enviar para a aba Security
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-${{ steps.name.outputs.slug }}.sarif
+          category: trivy-${{ steps.name.outputs.slug }}
+
+      - name: Gate (CRITICAL com correção disponível)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          skip-setup-trivy: true
+
+  # Nome estável para a regra de proteção da main (os jobs da matriz mudam de
+  # nome a cada versão de imagem).
+  supply-chain:
+    needs: scan
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - run: '[[ "${{ needs.scan.result }}" == "success" ]]'
