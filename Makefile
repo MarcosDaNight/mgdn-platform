@@ -59,11 +59,12 @@ headscale-drain: ## Antes de recriar a VM principal: backup novo e Headscale par
 ssh: ## SSH na VM (HOST=mgdn-primary ou mgdn-secondary, pela tailnet)
 	@$(SSH)
 
-tunnel: ## Grafana :3000, Prometheus :9090 e API do Blocky :4000 em localhost
+tunnel: ## Grafana :3000, Prometheus :9090, Blocky :4000 e Alertmanager :9093 em localhost
 	@echo "Grafana    http://localhost:3000  (user admin; senha: make grafana-password)"
 	@echo "Prometheus http://localhost:9090"
 	@echo "Blocky API http://localhost:4000"
-	@$(SSH) -N -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 -L 4000:127.0.0.1:4000
+	@echo "Alertmanager http://localhost:9093"
+	@$(SSH) -N -L 3000:127.0.0.1:3000 -L 9090:127.0.0.1:9090 -L 4000:127.0.0.1:4000 -L 9093:127.0.0.1:9093
 
 grafana-password: ## Senha do admin do Grafana
 	@$(SSH) sudo cut -d= -f2 /etc/mgdn-platform/grafana.env

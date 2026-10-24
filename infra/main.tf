@@ -36,7 +36,7 @@ module "primary" {
   ssh_key_name = var.ssh_key_name
   repo_url     = var.repo_url
   repo_branch  = var.repo_branch
-  env          = merge(local.common_env, local.backup_env)
+  env          = merge(local.common_env, local.backup_env, { ALERT_NTFY_URL = var.alert_ntfy_url })
 
   public_ports = merge(local.dns_ports, local.ssh_port, {
     acme  = { protocol = "tcp", port = 80, description = "ACME HTTP-01 (Let's Encrypt)" }

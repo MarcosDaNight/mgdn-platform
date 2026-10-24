@@ -2,19 +2,58 @@ global:
   scrape_interval: 30s
   evaluation_interval: 30s
 
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   - job_name: blocky
     static_configs:
       - targets: ["blocky:4000"]
+        labels: {host: primary}
+      # A secundária é coletada pela tailnet (portas de métricas fechadas na interface pública).
+      - targets: ["100.64.0.4:4000"]
+        labels: {host: secondary}
 
   - job_name: node
     static_configs:
       - targets: ["node-exporter:9100"]
+        labels: {host: primary}
+      - targets: ["100.64.0.4:9100"]
+        labels: {host: secondary}
+
+  - job_name: headscale
+    static_configs:
+      - targets: ["headscale:9090"]
 
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
 
-  - job_name: headscale
+  # SLI do DNS (ADR 0009): resolução e bloqueio em cada Blocky, a cada 30 s.
+  - job_name: dns
+    metrics_path: /probe
     static_configs:
-      - targets: ["headscale:9090"]
+      - targets: ["blocky:53", "100.64.0.4:53"]
+        labels: {module: dns_resolve}
+      - targets: ["blocky:53", "100.64.0.4:53"]
+        labels: {module: dns_block}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [module]
+        target_label: __param_module
+      - source_labels: [__address__]
+        regex: "blocky:53"
+        target_label: resolver
+        replacement: primary
+      - source_labels: [__address__]
+        regex: '100\.64\.0\.4:53'
+        target_label: resolver
+        replacement: secondary
+      - target_label: __address__
+        replacement: blackbox:9115

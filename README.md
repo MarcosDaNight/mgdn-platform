@@ -56,6 +56,7 @@ flowchart LR
 | [0006](docs/adr/0006-backup-imutavel-e-restore-drill.md) | Backup imutável do Headscale e restore drill mensal |
 | [0007](docs/adr/0007-rotacao-dos-backups.md) | Rotação dos backups sem lifecycle do provedor |
 | [0008](docs/adr/0008-cadeia-de-suprimentos.md) | Cadeia de suprimentos: digests fixos e varredura das imagens |
+| [0009](docs/adr/0009-slo-e-alertas.md) | SLO do DNS com orçamento de erro e alertas no celular |
 
 ## Orçamento
 
@@ -78,6 +79,9 @@ deploy/                    o que roda nas VMs (fonte da verdade do GitOps)
   primary/compose.yaml     headscale, blocky, prometheus, node-exporter, grafana
   primary/headscale/       configuração do Headscale (DNS da tailnet = Blocky)
   primary/backup/          chave pública age que cifra os backups
+  primary/blackbox/        sondas DNS (resolve e bloqueia) que alimentam o SLI
+  primary/prometheus/      coleta, regras de SLO/alertas (rules/) e testes (tests/)
+  primary/alertmanager/    envio dos alertas ao ntfy
   secondary/compose.yaml   só o Blocky (DNS secundário em br-se1)
   systemd/                 timers: gitops, healthcheck, allowlist, limpeza semanal
 scripts/
@@ -89,6 +93,7 @@ scripts/
   prune.sh / retention.py  rotação: 30 dias de diários + 12 mensais (mín. 7)
   s3.sh                    cliente S3 mínimo (curl --aws-sigv4)
 docs/adr/                  decisões de arquitetura
+docs/runbooks/             o que fazer quando cada alerta tocar
 ```
 
 ## Operação
@@ -154,6 +159,20 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
 - **VM secundária recriada:** ela não tem estado, então entra na tailnet como um nó novo, com
   outro IP. Remova o nó antigo (`make tailnet-nodes`, depois `headscale nodes delete -i <id>`)
   e atualize o IP dela em `dns.nameservers.global` no Headscale (PR).
+
+### SLO e alertas (ADR 0009)
+
+- **SLO: 99,9% em 30 dias** para "o DNS resolve e bloqueia" (~43 min/mês de orçamento de
+  erro). Sondas a cada 30 s nos dois Blockys; o dashboard **SLO do DNS** (`make tunnel`,
+  Grafana) mostra a disponibilidade, o orçamento restante e a taxa de consumo.
+- **Alertas no celular (ntfy):** queda real (queima rápida do orçamento), degradação
+  (queima lenta), um resolver fora (perda de redundância) e alvo sem coleta. Cada um aponta
+  para um runbook em [`docs/runbooks/`](docs/runbooks/).
+- **Configurar:** instale o app **ntfy**, assine o tópico secreto e coloque
+  `https://ntfy.sh/<tópico>?template=alertmanager` em `alert_ntfy_url`. Isso recria a
+  principal: rode `make headscale-drain` antes.
+- As regras têm testes (`promtool test rules`, em `deploy/primary/prometheus/tests/`)
+  rodados no CI e na VM antes de cada deploy.
 
 ### Checklist mensal
 
