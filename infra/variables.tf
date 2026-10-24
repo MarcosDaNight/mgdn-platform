@@ -10,6 +10,12 @@ variable "vpc_ids" {
   default     = {}
 }
 
+variable "cloudflare_api_token" {
+  description = "Token da Cloudflare com Zone:Read e DNS:Edit só em mgdn.com.br (ADR 0010)."
+  type        = string
+  sensitive   = true
+}
+
 variable "ssh_key_name" {
   description = "Chave SSH cadastrada na Magalu Cloud."
   type        = string

@@ -9,6 +9,24 @@ mock_provider "mgc" {
   alias = "se1"
 }
 
+mock_provider "cloudflare" {}
+
+# Registros de e-mail importados (dns.tf): mocks não importam, então são simulados.
+override_resource {
+  target = cloudflare_dns_record.null_mx
+  values = { id = "d72b663ca20808faf637f5cd886befd8" }
+}
+
+override_resource {
+  target = cloudflare_dns_record.spf
+  values = { id = "b5b7c43f7089303891f419c294886e77" }
+}
+
+override_resource {
+  target = cloudflare_dns_record.dmarc
+  values = { id = "1c3bced9259697450bc61341a0d439fd" }
+}
+
 # Mocks não importam recursos: o IP herdado do v1 (bloco import) é simulado.
 override_resource {
   target = module.primary.mgc_network_public_ips.this
@@ -17,17 +35,18 @@ override_resource {
 
 variables {
   # O mock não preenche a lista aninhada de VPCs do provider; os IDs vêm direto.
-  vpc_ids        = { ne1 = "vpc-ne1", se1 = "vpc-se1" }
-  mgc_api_key    = "teste"
-  home_ddns_host = "casa.exemplo.net"
+  vpc_ids              = { ne1 = "vpc-ne1", se1 = "vpc-se1" }
+  mgc_api_key          = "teste"
+  cloudflare_api_token = "teste"
+  home_ddns_host       = "casa.exemplo.net"
 }
 
 run "portas_padrao" {
   command = plan
 
   assert {
-    condition     = module.primary.public_port_keys == tolist(["acme", "dns-tcp", "dns-udp", "https"])
-    error_message = "A principal deve abrir só DNS, ACME e HTTPS (Headscale)."
+    condition     = module.primary.public_port_keys == tolist(["dns-tcp", "dns-udp", "https"])
+    error_message = "A principal deve abrir só DNS e HTTPS (Traefik); a 80 saiu com o DNS-01."
   }
   assert {
     condition     = module.secondary.public_port_keys == tolist(["dns-tcp", "dns-udp"])
@@ -108,4 +127,29 @@ run "rejeita_cidr_invalido" {
     extra_allowed_cidrs = ["300.1.2.3/32"]
   }
   expect_failures = [var.extra_allowed_cidrs]
+}
+
+run "headscale_no_dominio_proprio" {
+  command = plan
+
+  assert {
+    condition     = cloudflare_dns_record.headscale.name == "headscale.mgdn.com.br" && cloudflare_dns_record.headscale.proxied == false
+    error_message = "headscale.mgdn.com.br deve ser só DNS (sem proxy da Cloudflare): o Tailscale não passa pelo proxy HTTP."
+  }
+}
+
+run "token_da_cloudflare_so_na_principal" {
+  command = plan
+  variables {
+    cloudflare_api_token = "token-de-teste"
+  }
+
+  assert {
+    condition     = strcontains(module.primary.cloud_init, "CLOUDFLARE_DNS_TOKEN=token-de-teste")
+    error_message = "O Traefik da principal precisa do token da Cloudflare (DNS-01)."
+  }
+  assert {
+    condition     = !strcontains(module.secondary.cloud_init, "CLOUDFLARE_DNS_TOKEN")
+    error_message = "A secundária não pode receber o token da Cloudflare."
+  }
 }
