@@ -134,6 +134,12 @@ apply() {
 
   compose pull --quiet
 
+  # Token da Cloudflare para o Traefik emitir certificados por DNS-01 (ADR 0010).
+  if has_service traefik; then
+    install -d -m 0700 /etc/mgdn-platform/traefik
+    printf '%s' "${CLOUDFLARE_DNS_TOKEN:-}" | install -m 0600 /dev/stdin /etc/mgdn-platform/traefik/cf-dns-token
+  fi
+
   # URL secreta do ntfy para o Alertmanager (ADR 0009): arquivo fora do repo,
   # legível pelo usuário do container (nobody). Sem URL, os alertas não saem.
   if has_service alertmanager; then
@@ -145,7 +151,7 @@ apply() {
   # VM nova (primeiro deploy): restaura o Headscale do backup mais recente antes de
   # subi-lo, para os aparelhos seguirem na tailnet sem novo registro (ADR 0006).
   if [[ -z "$from" ]] && has_service headscale && [[ -n "${BACKUP_BUCKET:-}" ]]; then
-    compose create headscale >/dev/null
+    compose create headscale vaultwarden >/dev/null
     "$REPO_DIR/scripts/restore.sh" --if-empty --with-tailscale >/dev/null || log "AVISO: restore do Headscale falhou; subindo com estado vazio"
   fi
 
