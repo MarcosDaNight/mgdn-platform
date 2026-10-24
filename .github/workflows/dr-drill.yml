@@ -1,0 +1,95 @@
+name: dr-drill
+
+# Restore drill mensal (ADR 0006): restaura o backup mais recente do Headscale num
+# runner descartável, sobe o Headscale com ele, confere os nós e publica RTO/RPO
+# medidos. Backup que nunca foi restaurado não prova nada.
+#
+# Secrets: BACKUP_RO_ACCESS_KEY / BACKUP_RO_SECRET_KEY (chave mgdn-backup-ro, só
+# leitura) e BACKUP_AGE_IDENTITY (linha AGE-SECRET-KEY-... da chave privada).
+on:
+  schedule:
+    - cron: "0 12 2 * *" # dia 2, 09:00 BRT
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drill:
+    runs-on: ubuntu-24.04
+    env:
+      BACKUP_ENDPOINT: https://br-se1.magaluobjects.com
+      BACKUP_REGION: br-se1
+      BACKUP_BUCKET: mgdn-platform-backup-b29a4ccd
+      BACKUP_ACCESS_KEY: ${{ secrets.BACKUP_RO_ACCESS_KEY }}
+      BACKUP_SECRET_KEY: ${{ secrets.BACKUP_RO_SECRET_KEY }}
+      BACKUP_AGE_IDENTITY: ${{ secrets.BACKUP_AGE_IDENTITY }}
+      # Nós que precisam existir no banco restaurado.
+      EXPECTED_NODES: mgdn-primary mgdn-secondary
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Ferramentas
+        run: sudo apt-get install -y -qq age sqlite3 >/dev/null
+
+      - name: Restore + Headscale de pé
+        id: drill
+        run: |
+          set -euo pipefail
+          t0=$(date +%s)
+          data="$RUNNER_TEMP/headscale"
+          restored=$(scripts/restore.sh --target "$data" | sed -n 's/^restored=//p')
+
+          # Mesma config de produção, mas local: HTTP em 8080 e sem ACME.
+          sed -e 's#^server_url: .*#server_url: http://127.0.0.1:8080#' \
+              -e 's#^listen_addr: .*#listen_addr: 0.0.0.0:8080#' \
+              -e 's#^tls_letsencrypt_hostname: .*#tls_letsencrypt_hostname: ""#' \
+              deploy/primary/headscale/config.yaml > "$RUNNER_TEMP/config.yaml"
+          image=$(docker compose -f deploy/primary/compose.yaml config --format json | jq -r '.services.headscale.image')
+          docker run -d --name hs -p 127.0.0.1:8080:8080 \
+            -v "$RUNNER_TEMP/config.yaml:/etc/headscale/config.yaml:ro" \
+            -v "$data:/var/lib/headscale" "$image" serve >/dev/null
+          for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8080/health && break; sleep 2; done
+          curl -fsS -o /dev/null http://127.0.0.1:8080/health
+          t1=$(date +%s)
+
+          nodes=$(docker exec hs headscale nodes list -o json | jq -r '.[].given_name' | sort | xargs)
+          for n in $EXPECTED_NODES; do
+            grep -qw "$n" <<<"$nodes" || { echo "::error::nó $n ausente no backup restaurado"; exit 1; }
+          done
+
+          # RPO: idade do backup restaurado (chave headscale/AAAAMMDDTHHMMSSZ...).
+          stamp=$(basename "$restored" .tar.gz.age)
+          backup_epoch=$(date -u -d "$(sed -E 's/(....)(..)(..)T(..)(..)(..)Z/\1-\2-\3 \4:\5:\6/' <<<"$stamp")" +%s)
+          {
+            echo "restored=$restored"
+            echo "rto=$((t1 - t0))"
+            echo "rpo_h=$(( (t1 - backup_epoch) / 3600 ))"
+            echo "nodes=$nodes"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Resultado
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.drill.outcome }}
+          RESTORED: ${{ steps.drill.outputs.restored }}
+          RTO: ${{ steps.drill.outputs.rto }}
+          RPO: ${{ steps.drill.outputs.rpo_h }}
+          NODES: ${{ steps.drill.outputs.nodes }}
+        run: |
+          month=$(TZ=America/Sao_Paulo date +%Y-%m)
+          if [[ "$OUTCOME" == "success" ]]; then
+            title="DR drill $month: OK (RTO ${RTO}s, RPO ${RPO}h)"
+          else
+            title="DR drill $month: FALHOU"
+          fi
+          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n| Execução | %s |\n' \
+            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
+          echo "$body" >>"$GITHUB_STEP_SUMMARY"
+          gh label create dr-drill --color 5319E7 --description "Restore drill mensal" --force >/dev/null
+          url=$(gh issue create --title "$title" --body "$body" --label dr-drill --assignee "$GITHUB_REPOSITORY_OWNER")
+          # Sucesso vira registro (issue fechada); falha fica aberta e notifica.
+          [[ "$OUTCOME" != "success" ]] || gh issue close "$url" --reason completed >/dev/null
