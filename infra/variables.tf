@@ -75,3 +75,15 @@ variable "secondary_tailnet_authkey" {
   default     = ""
   sensitive   = true
 }
+
+variable "backup" {
+  description = "Backup do Headscale (ADR 0006): credenciais da chave mgdn-backup (object-storage read/write), identidade age (linha AGE-SECRET-KEY-...) para o restore automático e URL opcional do healthchecks.io."
+  type = object({
+    access_key      = string
+    secret_key      = string
+    age_identity    = string
+    healthcheck_url = optional(string, "")
+  })
+  default   = null
+  sensitive = true
+}

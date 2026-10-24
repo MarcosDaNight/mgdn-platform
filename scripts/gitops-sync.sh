@@ -118,12 +118,20 @@ apply() {
   # Idempotente: units novas são habilitadas mesmo se instaladas por uma versão
   # anterior deste script.
   systemctl enable --quiet mgdn-allowlist.service
-  systemctl enable --quiet --now mgdn-gitops.timer mgdn-healthcheck.timer mgdn-allowlist.timer mgdn-maintenance.timer
+  systemctl enable --quiet --now mgdn-gitops.timer mgdn-healthcheck.timer mgdn-allowlist.timer mgdn-maintenance.timer mgdn-backup.timer
 
   # Filtro de origem ativo antes de qualquer container publicar a porta 53.
   systemctl start mgdn-allowlist.service
 
   compose pull --quiet
+
+  # VM nova (primeiro deploy): restaura o Headscale do backup mais recente antes de
+  # subi-lo, para os aparelhos seguirem na tailnet sem novo registro (ADR 0006).
+  if [[ -z "$from" ]] && has_service headscale && [[ -n "${BACKUP_BUCKET:-}" ]]; then
+    compose create headscale >/dev/null
+    "$REPO_DIR/scripts/restore.sh" --if-empty --with-tailscale >/dev/null || log "AVISO: restore do Headscale falhou; subindo com estado vazio"
+  fi
+
   compose up -d --remove-orphans
 
   [[ -z "$from" ]] && return 0
