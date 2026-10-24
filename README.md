@@ -54,6 +54,7 @@ flowchart LR
 | [0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md) | Evoluir o blocky-cloud-dns em vez de recomeçar |
 | [0005](docs/adr/0005-dns-secundario-em-outra-regiao.md) | DNS secundário em outra região |
 | [0006](docs/adr/0006-backup-imutavel-e-restore-drill.md) | Backup imutável do Headscale e restore drill mensal |
+| [0007](docs/adr/0007-rotacao-dos-backups.md) | Rotação dos backups sem lifecycle do provedor |
 
 ## Orçamento
 
@@ -84,6 +85,7 @@ scripts/
   allowlist.sh             porta 53 pública só para o IP de casa (DDNS)
   healthcheck.sh           DNS, bloqueio, tráfego de casa, disco, Headscale, DNS da tailnet
   backup.sh / restore.sh   backup cifrado e imutável do Headscale; restore automático no boot
+  prune.sh / retention.py  rotação: 30 dias de diários + 12 mensais (mín. 7)
   s3.sh                    cliente S3 mínimo (curl --aws-sigv4)
 docs/adr/                  decisões de arquitetura
 ```
@@ -136,6 +138,10 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
   `make apply`, rode `make headscale-drain`**: ele faz um backup novo e para o Headscale de
   forma limpa. Sem isso, clientes Linux com conexão longa ficam até ~15 min presos a uma
   conexão TCP meio aberta com a VM destruída (o túnel de dados não cai nesse meio-tempo).
+- **Rotação (ADR 0007):** depois de cada backup, mantém todos os dos últimos 30 dias, o
+  primeiro de cada mês por 12 meses e nunca menos de 7 (~43 no total). A Magalu não oferece
+  lifecycle, então a rotação roda na VM; o object lock impede que algo com menos de 30 dias
+  seja apagado, mesmo por engano. Simulação: `sudo /opt/mgdn-platform/scripts/prune.sh --dry-run`.
 - **Restore drill:** todo dia 2 o workflow `dr-drill` restaura o backup num runner
   descartável, confere os nós e abre uma issue `dr-drill` com RTO e RPO. Uma falha fica
   aberta e notifica. Para rodar fora de hora: *Actions → dr-drill → Run workflow*.

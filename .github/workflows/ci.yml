@@ -53,3 +53,5 @@ jobs:
       - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
       - run: pipx run pre-commit run --all-files --show-diff-on-failure
+      - name: política de retenção dos backups (autoteste)
+        run: python3 scripts/retention.py --self-test
