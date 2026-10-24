@@ -74,9 +74,10 @@ resource "mgc_virtual_machine_instances" "this" {
       REPO_URL    = var.repo_url
       REPO_BRANCH = var.repo_branch
     })
-    repo_url    = var.repo_url
-    repo_branch = var.repo_branch
-    hosts       = var.etc_hosts
+    repo_url       = var.repo_url
+    repo_branch    = var.repo_branch
+    hosts          = var.etc_hosts
+    extra_packages = var.extra_packages
   }))
 }
 
