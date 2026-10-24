@@ -31,7 +31,9 @@ home_queries() {
 }
 
 uptime_min=$(($(cut -d. -f1 /proc/uptime) / 60))
-if ((uptime_min < idle_window_min)); then
+# Só a principal: a secundária quase não recebe consultas com a principal saudável
+# (ADR 0005), então silêncio nela é normal.
+if [[ "${ROLE:-}" != "primary" ]] || ((uptime_min < idle_window_min)); then
   home="skip"
 else
   home=$(home_queries)

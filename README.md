@@ -52,6 +52,7 @@ flowchart LR
 | [0002](docs/adr/0002-vms-em-vez-de-kubernetes.md) | VMs com Docker Compose em vez de Kubernetes |
 | [0003](docs/adr/0003-tailnet-com-headscale.md) | Tailnet com Headscale, com o Blocky como DNS dela |
 | [0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md) | Evoluir o blocky-cloud-dns em vez de recomeçar |
+| [0005](docs/adr/0005-dns-secundario-em-outra-regiao.md) | DNS secundário em outra região |
 
 ## Orçamento
 
@@ -73,6 +74,7 @@ deploy/                    o que roda nas VMs (fonte da verdade do GitOps)
   common/blocky/           configuração do Blocky, compartilhada pelos papéis
   primary/compose.yaml     headscale, blocky, prometheus, node-exporter, grafana
   primary/headscale/       configuração do Headscale (DNS da tailnet = Blocky)
+  secondary/compose.yaml   só o Blocky (DNS secundário em br-se1)
   systemd/                 timers: gitops, healthcheck, allowlist, limpeza semanal
 scripts/
   gitops-sync.sh           por papel: validar → aplicar → verificar → rollback
@@ -88,8 +90,8 @@ docs/adr/                  decisões de arquitetura
 
 | Comando | O que faz |
 |---|---|
-| `make status` | commit aplicado, containers, tailnet, timers, RAM e disco |
-| `make test` | resolve e bloqueia pelo IP público e pela tailnet |
+| `make status [HOST=mgdn-secondary]` | commit aplicado, containers, tailnet, timers, RAM e disco |
+| `make test` | resolve e bloqueia nas duas VMs (IPs públicos) e pela tailnet |
 | `make tailnet-nodes` | aparelhos na tailnet |
 | `make tailnet-register AUTH_ID=… NAME=…` | aprova (e nomeia) um aparelho novo |
 | `make allowlist` | IP de casa liberado na porta 53 e últimas trocas |
@@ -108,6 +110,16 @@ docs/adr/                  decisões de arquitetura
   com a chave gerada por `make tailnet-key` (uso único, vale 30 min).
 
 Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qualquer rede.
+
+### DNS secundário (VM em br-se1)
+
+- **Roteador:** em *Servidor DHCP*, DNS primário = `primary_ip` e DNS secundário =
+  `secondary_ip` (`terraform -chdir=infra output`). As duas VMs bloqueiam igual.
+- **Recriar a secundária:** ela entra na tailnet com uma chave de uso único. Gere com
+  `make tailnet-key`, coloque em `secondary_tailnet_authkey` no `terraform.tfvars` e rode
+  `make apply` em até 30 min.
+- Cada VM pinga o próprio check no healthchecks.io (`healthcheck_url` e
+  `secondary_healthcheck_url`).
 
 ### SSH de emergência (break-glass)
 

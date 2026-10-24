@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        role: [primary]
+        role: [primary, secondary]
     defaults:
       run:
         working-directory: deploy/${{ matrix.role }}

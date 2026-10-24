@@ -2,7 +2,7 @@
 version: 2
 updates:
   - package-ecosystem: docker-compose
-    directory: /deploy/primary
+    directories: ["/deploy/primary", "/deploy/secondary"]
     schedule:
       interval: weekly
     groups:

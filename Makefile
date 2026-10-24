@@ -5,8 +5,8 @@ TF      ?= terraform
 TFDIR   := infra
 ENV     := set -a && source ./.env && set +a &&
 ENV_ABS := set -a && source ../.env && set +a &&
-# Acesso pela tailnet (MagicDNS). Antes de entrar na tailnet: HOST=<IP público>
-# com ssh_break_glass = true no terraform.tfvars.
+# Acesso pela tailnet (MagicDNS): mgdn-primary ou mgdn-secondary. Sem tailnet:
+# HOST=<IP público> com ssh_break_glass = true no terraform.tfvars.
 HOST    ?= mgdn-primary
 SSH      = ssh -o StrictHostKeyChecking=accept-new ubuntu@$(HOST)
 COMPOSE := sudo docker compose -f /opt/mgdn-platform/deploy/$$(. /etc/mgdn-platform/env && echo $$ROLE)/compose.yaml
@@ -52,7 +52,7 @@ tailnet-key: ## Chave de uso único (30 min) para `tailscale up --authkey` em Li
 # --- Operação -------------------------------------------------------------------
 
 .PHONY: ssh tunnel grafana-password status allowlist sync logs querylog test
-ssh: ## SSH na VM (HOST=mgdn-primary pela tailnet)
+ssh: ## SSH na VM (HOST=mgdn-primary ou mgdn-secondary, pela tailnet)
 	@$(SSH)
 
 tunnel: ## Grafana :3000, Prometheus :9090 e API do Blocky :4000 em localhost
@@ -83,9 +83,9 @@ logs: ## Logs do Blocky (SERVICE=headscale etc.)
 querylog: ## Últimos domínios bloqueados (N=50)
 	@$(SSH) 'sudo sh -c "cat /var/lib/docker/volumes/mgdn_blocky-logs/_data/*.log" | awk -F"\t" "\$$5 ~ /BLOCKED/ {print \$$1, \$$2, \$$6}" | tail -n $(or $(N),50)'
 
-test: ## Testa resolução e bloqueio pelo IP público (de casa) e pela tailnet
-	@ip=$$(cd $(TFDIR) && $(ENV_ABS) $(TF) output -raw primary_ip); \
-	 for s in $$ip 100.64.0.1; do \
+test: ## Testa resolução e bloqueio nas duas VMs (IPs públicos, de casa) e pela tailnet
+	@cd $(TFDIR) && $(ENV_ABS) p=$$($(TF) output -raw primary_ip) && s2=$$($(TF) output -raw secondary_ip 2>/dev/null); \
+	 for s in $$p $$s2 100.64.0.1; do \
 	   echo -n "$$s: resolve cloudflare.com -> "; dig +short +time=3 +tries=1 @$$s cloudflare.com | head -1; \
 	   echo -n "$$s: bloqueia pagead2.googlesyndication.com -> "; dig +short +time=3 +tries=1 @$$s pagead2.googlesyndication.com | head -1; \
 	 done

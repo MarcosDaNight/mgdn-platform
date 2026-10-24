@@ -28,9 +28,16 @@ terraform {
   }
 }
 
-# Região principal. A secundária (br-se1) entra na fase 2 com um alias.
+# Região principal.
 provider "mgc" {
   alias   = "ne1"
   region  = "br-ne1"
+  api_key = var.mgc_api_key
+}
+
+# Região da VM secundária (ADR 0005).
+provider "mgc" {
+  alias   = "se1"
+  region  = "br-se1"
   api_key = var.mgc_api_key
 }

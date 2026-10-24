@@ -36,6 +36,24 @@ module "primary" {
   etc_hosts = { (var.headscale_hostname) = "127.0.0.1" }
 }
 
+module "secondary" {
+  source    = "./modules/host"
+  providers = { mgc = mgc.se1 }
+
+  name         = "mgdn-secondary"
+  role         = "secondary"
+  machine_type = "BV1-1-10"
+  ssh_key_name = var.ssh_key_name
+  repo_url     = var.repo_url
+  repo_branch  = var.repo_branch
+  env = merge(local.common_env, {
+    HEALTHCHECK_URL = var.secondary_healthcheck_url
+    TAILNET_AUTHKEY = var.secondary_tailnet_authkey
+  })
+
+  public_ports = merge(local.dns_ports, local.ssh_port)
+}
+
 # IP público herdado do blocky-cloud-dns (ADR 0004): o roteador de casa não muda.
 import {
   to = module.primary.mgc_network_public_ips.this

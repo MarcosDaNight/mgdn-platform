@@ -1,0 +1,24 @@
+# Stack da VM secundária (papel "secondary", ADR 0005): só o Blocky, com a mesma
+# configuração da principal (deploy/common/blocky). Porta pública: 53 (origem
+# filtrada no host). Dimensionada para a BV1-1-10 (1 GB RAM + 1 GB swap).
+name: mgdn
+
+services:
+  blocky:
+    image: spx01/blocky:v0.35.0
+    restart: unless-stopped
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+      - "127.0.0.1:4000:4000/tcp"
+    environment:
+      TZ: America/Sao_Paulo
+    volumes:
+      - ../common/blocky/config.yml:/app/config.yml:ro
+      - blocky-cache:/app/cache
+      - blocky-logs:/logs
+    mem_limit: 256m
+
+volumes:
+  blocky-cache:
+  blocky-logs:

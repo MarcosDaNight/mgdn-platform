@@ -66,9 +66,7 @@ main() {
   fi
 
   # Registro na tailnet: idempotente e não bloqueia o deploy (o DNS já está no ar).
-  if [[ "$ROLE" == "primary" ]]; then
-    "$REPO_DIR/scripts/tailnet-join.sh" || log "AVISO: registro na tailnet falhou; nova tentativa no próximo sync forçado"
-  fi
+  "$REPO_DIR/scripts/tailnet-join.sh" || log "AVISO: registro na tailnet falhou; nova tentativa no próximo sync forçado"
 }
 
 REPO_DIR=/opt/mgdn-platform
