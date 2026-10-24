@@ -1,6 +1,19 @@
-# PRs de atualização. Novos ecossistemas (docker-compose, terraform) entram com as fases.
+# PRs de atualização. Com o CI verde e o merge na main, as VMs aplicam sozinhas.
 version: 2
 updates:
+  - package-ecosystem: docker-compose
+    directory: /deploy/primary
+    schedule:
+      interval: weekly
+    groups:
+      monitoring:
+        patterns: ["prom/*", "grafana/*"]
+
+  - package-ecosystem: terraform
+    directories: ["/infra", "/infra/modules/host"]
+    schedule:
+      interval: monthly
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

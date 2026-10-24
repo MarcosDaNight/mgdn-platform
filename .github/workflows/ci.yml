@@ -1,5 +1,7 @@
 name: ci
 
+# Gate do GitOps: a VM só aplica o que está na main, e nada entra na main sem
+# passar aqui. Os mesmos checks rodam de novo na VM antes de aplicar.
 on:
   pull_request:
   push:
@@ -9,8 +11,45 @@ permissions:
   contents: read
 
 jobs:
+  terraform:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+      - run: terraform fmt -check -recursive -diff
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
+  deploy-config:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        role: [primary]
+    defaults:
+      run:
+        working-directory: deploy/${{ matrix.role }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: compose
+        run: docker compose config --quiet
+      - name: blocky validate
+        run: docker compose run --rm --no-deps -T blocky validate
+      - name: promtool check config
+        if: hashFiles(format('deploy/{0}/prometheus/prometheus.yml', matrix.role)) != ''
+        run: docker compose run --rm --no-deps -T --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+      - name: headscale configtest
+        if: hashFiles(format('deploy/{0}/headscale/config.yaml', matrix.role)) != ''
+        run: |
+          image=$(docker compose config --format json | jq -r '.services.headscale.image')
+          docker run --rm -v "$PWD/headscale/config.yaml:/etc/headscale/config.yaml:ro" \
+            --tmpfs /var/lib/headscale --tmpfs /var/run/headscale "$image" configtest
+
   pre-commit:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
       - run: pipx run pre-commit run --all-files --show-diff-on-failure
