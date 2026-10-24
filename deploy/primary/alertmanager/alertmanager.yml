@@ -1,0 +1,14 @@
+# Alertas no celular via ntfy (ADR 0009). A URL do tópico é secreta e vem de um
+# arquivo na VM (gerado pelo gitops-sync a partir de ALERT_NTFY_URL), nunca do repo.
+route:
+  receiver: ntfy
+  group_by: [alertname, resolver]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: ntfy
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/ntfy-url
+        send_resolved: true

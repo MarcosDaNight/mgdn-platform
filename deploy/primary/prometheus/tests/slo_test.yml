@@ -1,0 +1,80 @@
+# Testes das regras de SLO: `promtool test rules` (rodado no CI e na VM).
+rule_files:
+  - ../rules/slo.yml
+
+evaluation_interval: 30s
+
+tests:
+  # Tudo saudável por 2 h: nenhum alerta.
+  - interval: 30s
+    input_series:
+      - series: 'probe_success{job="dns",resolver="primary",module="dns_resolve"}'
+        values: "1x240"
+      - series: 'probe_success{job="dns",resolver="primary",module="dns_block"}'
+        values: "1x240"
+      - series: 'probe_success{job="dns",resolver="secondary",module="dns_resolve"}'
+        values: "1x240"
+      - series: 'probe_success{job="dns",resolver="secondary",module="dns_block"}'
+        values: "1x240"
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: DNSErrorBudgetFastBurn
+        exp_alerts: []
+      - eval_time: 2h
+        alertname: DNSResolverDown
+        exp_alerts: []
+    promql_expr_test:
+      - expr: dns:service_ok:ratio_rate1h
+        eval_time: 2h
+        exp_samples:
+          - labels: "dns:service_ok:ratio_rate1h"
+            value: 1
+
+  # A principal para de BLOQUEAR (resolve, mas vaza anúncio). A secundária segue ok:
+  # alerta de resolver, nenhum consumo do orçamento do serviço.
+  - interval: 30s
+    input_series:
+      - series: 'probe_success{job="dns",resolver="primary",module="dns_resolve"}'
+        values: "1x120"
+      - series: 'probe_success{job="dns",resolver="primary",module="dns_block"}'
+        values: "1x60 0x60"
+      - series: 'probe_success{job="dns",resolver="secondary",module="dns_resolve"}'
+        values: "1x120"
+      - series: 'probe_success{job="dns",resolver="secondary",module="dns_block"}'
+        values: "1x120"
+    alert_rule_test:
+      - eval_time: 40m
+        alertname: DNSResolverDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              resolver: primary
+            exp_annotations:
+              summary: "Blocky primary não resolve ou não bloqueia há 5 min"
+              description: "O DNS segue pelo outro resolver, mas sem redundância."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/dns-resolver-down.md
+      - eval_time: 40m
+        alertname: DNSErrorBudgetFastBurn
+        exp_alerts: []
+
+  # Os dois caem por 10 min depois de 1 h saudável: queima rápida do orçamento.
+  - interval: 30s
+    input_series:
+      - series: 'probe_success{job="dns",resolver="primary",module="dns_resolve"}'
+        values: "1x120 0x20"
+      - series: 'probe_success{job="dns",resolver="primary",module="dns_block"}'
+        values: "1x120 0x20"
+      - series: 'probe_success{job="dns",resolver="secondary",module="dns_resolve"}'
+        values: "1x120 0x20"
+      - series: 'probe_success{job="dns",resolver="secondary",module="dns_block"}'
+        values: "1x120 0x20"
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: DNSErrorBudgetFastBurn
+        exp_alerts:
+          - exp_labels:
+              severity: page
+            exp_annotations:
+              summary: "DNS fora do ar: orçamento de erro queimando 14x mais rápido que o normal"
+              description: "Erro na última hora: 16.67%. Nenhum Blocky está respondendo e bloqueando."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/dns-error-budget.md

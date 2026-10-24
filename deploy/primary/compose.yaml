@@ -47,6 +47,29 @@ services:
       - prometheus-data:/prometheus
     mem_limit: 256m
 
+  blackbox:
+    image: prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
+    restart: unless-stopped
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    mem_limit: 64m
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # URL secreta do ntfy, escrita pelo gitops-sync a partir de ALERT_NTFY_URL.
+      - /etc/mgdn-platform/alertmanager:/etc/alertmanager/secrets:ro
+      - alertmanager-data:/alertmanager
+    mem_limit: 64m
+
   node-exporter:
     image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
     restart: unless-stopped
@@ -92,3 +115,4 @@ volumes:
   blocky-logs:
   prometheus-data:
   grafana-data:
+  alertmanager-data:

@@ -1,0 +1,75 @@
+# SLO do DNS (ADR 0009): 99,9% em 30 dias para "resolve E bloqueia".
+# Orçamento de erro: 0,1% ≈ 43 min/mês. Alertas por taxa de consumo do orçamento
+# (burn rate) em duas janelas, conforme o SRE Workbook do Google.
+groups:
+  - name: dns-sli
+    interval: 30s
+    rules:
+      # 1 se o resolver respondeu às duas sondas (resolução e bloqueio).
+      - record: dns:resolver_ok
+        expr: min by (resolver) (probe_success{job="dns"})
+      # O serviço está ok se ao menos um resolver estiver: os clientes usam os dois.
+      - record: dns:service_ok
+        expr: max(dns:resolver_ok)
+      - record: dns:service_ok:ratio_rate5m
+        expr: avg_over_time(dns:service_ok[5m])
+      - record: dns:service_ok:ratio_rate30m
+        expr: avg_over_time(dns:service_ok[30m])
+      - record: dns:service_ok:ratio_rate1h
+        expr: avg_over_time(dns:service_ok[1h])
+      - record: dns:service_ok:ratio_rate6h
+        expr: avg_over_time(dns:service_ok[6h])
+      - record: dns:service_ok:ratio_rate30d
+        expr: avg_over_time(dns:service_ok[30d])
+      - record: dns:resolver_ok:ratio_rate30d
+        expr: avg_over_time(dns:resolver_ok[30d])
+
+  - name: dns-slo-alerts
+    rules:
+      # Consome 2% do orçamento mensal em 1 h (14,4x).
+      - alert: DNSErrorBudgetFastBurn
+        expr: |
+          (1 - dns:service_ok:ratio_rate1h) > (14.4 * 0.001)
+          and
+          (1 - dns:service_ok:ratio_rate5m) > (14.4 * 0.001)
+        labels:
+          severity: page
+        annotations:
+          summary: "DNS fora do ar: orçamento de erro queimando 14x mais rápido que o normal"
+          description: "Erro na última hora: {{ $value | humanizePercentage }}. Nenhum Blocky está respondendo e bloqueando."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/dns-error-budget.md
+
+      # Consome 5% do orçamento em 6 h (6x): degradação persistente.
+      - alert: DNSErrorBudgetSlowBurn
+        expr: |
+          (1 - dns:service_ok:ratio_rate6h) > (6 * 0.001)
+          and
+          (1 - dns:service_ok:ratio_rate30m) > (6 * 0.001)
+        labels:
+          severity: ticket
+        annotations:
+          summary: "DNS degradado: orçamento de erro queimando 6x mais rápido que o normal"
+          description: "Falhas intermitentes nas últimas 6 h."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/dns-error-budget.md
+
+      # Um resolver caiu: o serviço segue pelo outro, mas sem redundância.
+      - alert: DNSResolverDown
+        expr: dns:resolver_ok == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Blocky {{ $labels.resolver }} não resolve ou não bloqueia há 5 min"
+          description: "O DNS segue pelo outro resolver, mas sem redundância."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/dns-resolver-down.md
+
+      # Sem métricas, os alertas acima ficam cegos.
+      - alert: MonitoringTargetDown
+        expr: up == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus não coleta {{ $labels.job }} ({{ $labels.instance }}) há 10 min"
+          description: "Sem essas métricas os alertas de SLO ficam cegos."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/monitoring-target-down.md
