@@ -9,7 +9,7 @@ com orçamento-alvo de **R$ 100/mês**.
 congelado na release [`1.0.0`](https://github.com/MarcosDaNight/blocky-cloud-dns/releases/tag/1.0.0).
 O porquê da evolução está no [ADR 0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md).
 
-> 🚧 **Em construção.** Fases 0 e 1 concluídas; o roteiro abaixo mostra o restante.
+> 🚧 **Em construção.** Fases 0 a 2 concluídas; o roteiro abaixo mostra o restante.
 
 ## Arquitetura-alvo
 
@@ -62,7 +62,7 @@ flowchart LR
 | VM secundária BV1-1-10 (1 vCPU, 1 GB) | br-se1 | ~35 |
 | Object Storage, drills de DR, VMs efêmeras | — | centavos |
 | Domínio próprio (futuro) | — | ~3,50 |
-| **Total** | | **≈ 95–99** |
+| **Total (em produção desde 24/10/2026)** | | **≈ 95–99** |
 
 ## Estrutura
 
@@ -143,8 +143,10 @@ Cada fase entrega algo utilizável e tem um critério de aceite verificável.
   tailnet. *Aceite: o celular no 4G bloqueia anúncios e a porta 22 fica fechada para a
   internet.* Concluída em 24/10/2026: a troca do v1 deixou a casa ~5 min sem DNS; o iPhone
   no 4G passa pelo Blocky; a porta 22 fecha com 100% de perda em sondas externas.
-- [ ] **Fase 2: redundância.** Blocky secundário em br-se1. *Aceite: desligar a VM principal
-  não derruba o DNS de casa.*
+- [x] **Fase 2: redundância.** Blocky secundário em br-se1. *Aceite: desligar a VM principal
+  não derruba o DNS de casa.* Concluída em 24/10/2026: com o Blocky da principal parado, o
+  resolvedor do sistema seguiu respondendo pela secundária (90–170 ms) e bloqueando; o log
+  da secundária registrou as consultas.
 - [ ] **Fase 3: backup e DR.** Backup imutável entre regiões e restore drill mensal
   automatizado. *Aceite: RTO e RPO medidos e publicados.*
 - [ ] **Fase 4: engenharia.** `terraform test`, SLOs com error budget, alertas com runbook,
