@@ -63,11 +63,61 @@ flowchart LR
 | Domínio próprio (futuro) | — | ~3,50 |
 | **Total** | | **≈ 95–99** |
 
+## Estrutura
+
+```
+infra/                     Terraform (state remoto no Object Storage da Magalu)
+  main.tf                  hosts da plataforma e import do IP herdado do v1
+  modules/host/            uma VM: security group, IP público protegido, cloud-init
+deploy/                    o que roda nas VMs (fonte da verdade do GitOps)
+  common/blocky/           configuração do Blocky, compartilhada pelos papéis
+  primary/compose.yaml     headscale, blocky, prometheus, node-exporter, grafana
+  primary/headscale/       configuração do Headscale (DNS da tailnet = Blocky)
+  systemd/                 timers: gitops, healthcheck, allowlist, limpeza semanal
+scripts/
+  gitops-sync.sh           por papel: validar → aplicar → verificar → rollback
+  tailnet-join.sh          registra a VM principal na tailnet (100.64.0.1)
+  allowlist.sh             porta 53 pública só para o IP de casa (DDNS)
+  healthcheck.sh           DNS, bloqueio, tráfego de casa, disco, Headscale, DNS da tailnet
+docs/adr/                  decisões de arquitetura
+```
+
+## Operação
+
+`make help` lista tudo. O acesso às VMs é **pela tailnet** (`HOST=mgdn-primary`).
+
+| Comando | O que faz |
+|---|---|
+| `make status` | commit aplicado, containers, tailnet, timers, RAM e disco |
+| `make test` | resolve e bloqueia pelo IP público e pela tailnet |
+| `make tailnet-nodes` | aparelhos na tailnet |
+| `make tailnet-register KEY=…` | aprova um aparelho novo |
+| `make allowlist` | IP de casa liberado na porta 53 e últimas trocas |
+| `make querylog` / `make logs` | domínios bloqueados / logs dos containers |
+| `make tunnel` | Grafana, Prometheus e API do Blocky em `localhost` |
+
+### Colocar um aparelho na tailnet
+
+- **iPhone/Android:** instale o app do Tailscale, escolha *servidor alternativo* (no iOS:
+  *Ajustes → Tailscale → Alternate Coordination Server URL*) e informe
+  `https://mgdn-platform.duckdns.org`. Ao fazer login, o app mostra um comando
+  `headscale nodes register ... --key <chave>`: rode `make tailnet-register KEY=<chave>`.
+- **Linux:** `sudo tailscale up --login-server https://mgdn-platform.duckdns.org --authkey <chave>`,
+  com a chave gerada por `make tailnet-key` (uso único, vale 30 min).
+
+Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qualquer rede.
+
+### SSH de emergência (break-glass)
+
+Se a tailnet estiver fora, defina `ssh_break_glass = true` no `terraform.tfvars` e rode
+`make apply`: abre a porta 22 no security group, ainda filtrada pelo allowlist de casa,
+**sem recriar a VM**. Acesse com `make ssh HOST=<IP público>` e desligue depois.
+
 ## Roteiro
 
 Cada fase entrega algo utilizável e tem um critério de aceite verificável.
 
-- [ ] **Fase 0: fundação.** Repositório, ADRs, CI e release `1.0.0` do v1.
+- [x] **Fase 0: fundação.** Repositório, ADRs, CI e release `1.0.0` do v1.
 - [ ] **Fase 1: tailnet.** VM principal herdando o IP do v1, Headscale e o Blocky como DNS da
   tailnet. *Aceite: o celular no 4G bloqueia anúncios e a porta 22 fica fechada para a
   internet.*
