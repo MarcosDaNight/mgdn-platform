@@ -59,7 +59,8 @@ policy:
   mode: file
   path: ""
 
-# O Blocky da VM principal é o DNS de toda a tailnet: bloqueio em qualquer rede.
+# Os Blockys são o DNS de toda a tailnet: bloqueio em qualquer rede. A principal
+# (100.64.0.1) e a secundária em br-se1 (100.64.0.4, ADR 0005) bloqueiam igual.
 dns:
   magic_dns: true
   base_domain: tail.mgdn
@@ -67,6 +68,7 @@ dns:
   nameservers:
     global:
       - 100.64.0.1
+      - 100.64.0.4
     split: {}
   search_domains: []
   extra_records: []
