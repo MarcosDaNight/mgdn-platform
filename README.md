@@ -9,7 +9,7 @@ com orçamento-alvo de **R$ 100/mês**.
 congelado na release [`1.0.0`](https://github.com/MarcosDaNight/blocky-cloud-dns/releases/tag/1.0.0).
 O porquê da evolução está no [ADR 0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md).
 
-> 🚧 **Em construção.** Fases 0 a 3 concluídas; o roteiro abaixo mostra o restante.
+> 🚧 **Em construção.** Fases 0 a 4 concluídas; o roteiro abaixo mostra o restante.
 
 ## Arquitetura-alvo
 
@@ -210,7 +210,13 @@ Cada fase entrega algo utilizável e tem um critério de aceite verificável.
   | RPO da recriação (backup → apply) | **6 min** |
   | DNS fora do ar durante a recriação | **0** (a secundária atendeu casa e tailnet) |
   | Aparelhos que precisaram entrar de novo | **0** (mesmas `machine_key` e IPs) |
-- [ ] **Fase 4: engenharia.** `terraform test`, SLOs com error budget, alertas com runbook,
-  imagens fixadas por digest e varredura no CI, IP real dos clientes da tailnet no Blocky e
-  checklist mensal (herdado do v1).
+- [x] **Fase 4: engenharia.** Concluída em 24/10/2026:
+  - IP real dos clientes da tailnet no Blocky (a causa era o SNAT do próprio Tailscale);
+  - checklist mensal;
+  - imagens por digest, Actions por SHA e Trivy no CI ([ADR 0008](docs/adr/0008-cadeia-de-suprimentos.md));
+  - SLO 99,9% com alertas por burn rate no celular, runbooks e a secundária monitorada
+    ([ADR 0009](docs/adr/0009-slo-e-alertas.md)), com as regras cobertas por `promtool test rules`;
+  - `terraform test` com provider simulado: portas, break-glass, pacotes e credenciais por
+    host, validações. Inclui a regressão do PR #10, com teste de mutação comprovando que ela
+    é pega.
 - [ ] **Fase 5: apps pessoais**, só pela tailnet (Vaultwarden primeiro).

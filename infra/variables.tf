@@ -4,6 +4,12 @@ variable "mgc_api_key" {
   sensitive   = true
 }
 
+variable "vpc_ids" {
+  description = "VPC por região (ne1, se1). Vazio usa a VPC default de cada região."
+  type        = map(string)
+  default     = {}
+}
+
 variable "ssh_key_name" {
   description = "Chave SSH cadastrada na Magalu Cloud."
   type        = string

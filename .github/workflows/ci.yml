@@ -22,6 +22,8 @@ jobs:
       - run: terraform fmt -check -recursive -diff
       - run: terraform init -backend=false -input=false
       - run: terraform validate
+      - name: terraform test (provider simulado, sem credenciais)
+        run: terraform test
 
   deploy-config:
     runs-on: ubuntu-24.04

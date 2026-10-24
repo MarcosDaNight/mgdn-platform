@@ -10,10 +10,13 @@ terraform {
   }
 }
 
-data "mgc_network_vpcs" "all" {}
+# VPC default da região, a menos que var.vpc_id seja informada.
+data "mgc_network_vpcs" "all" {
+  count = var.vpc_id == null ? 1 : 0
+}
 
 locals {
-  vpc_id = one([for v in data.mgc_network_vpcs.all.items : v.id if v.name == "vpc_default"])
+  vpc_id = coalesce(var.vpc_id, try(one([for v in data.mgc_network_vpcs.all[0].items : v.id if v.name == "vpc_default"]), null))
 }
 
 resource "mgc_network_security_groups" "this" {
