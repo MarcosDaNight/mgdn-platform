@@ -13,6 +13,9 @@ Checklist mensal de manutenção do mgdn-platform. Marque os itens e feche a iss
 - [ ] A issue **DR drill** deste mês (aberta no dia 2) está *OK*, com RTO e RPO coerentes.
 - [ ] `make backups`: há backups recentes e a rotação está mantendo ~30 diários + mensais.
 
+### Vaultwarden
+- [ ] Abrir `https://vault.mgdn.com.br` pela tailnet; a issue do DR drill mostra o cofre restaurado com os itens.
+
 ### Tailnet
 - [ ] `make tailnet-nodes`: só aparelhos conhecidos. Remova os que você não usa mais.
 
@@ -22,4 +25,5 @@ Checklist mensal de manutenção do mgdn-platform. Marque os itens e feche a iss
 ### Prazos
 - [ ] API key `blocky-terraform` (Terraform, `.env`): expira em **28/09/2027**.
 - [ ] API keys `mgdn-backup` e `mgdn-backup-ro`: expiram em **24/10/2027**. Renovar exige atualizar o `terraform.tfvars` (recria a principal; rode `make headscale-drain` antes) e os secrets do GitHub.
-- [ ] Domínio próprio: quando for comprado, substituir o `mgdn-platform.duckdns.org` (ADR novo).
+- [ ] Domínio `mgdn.com.br`: renovação no registro.br até **24/10/2027** (deixe a renovação automática ligada).
+- [ ] Token da Cloudflare (DNS do `mgdn.com.br`): expira em **25/10/2027**. Renovar exige atualizar o `terraform.tfvars` (recria a principal; `make headscale-drain` antes).
