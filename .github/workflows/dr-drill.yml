@@ -59,6 +59,14 @@ jobs:
             grep -qw "$n" <<<"$nodes" || { echo "::error::nó $n ausente no backup restaurado"; exit 1; }
           done
 
+          # Rotação (ADR 0007): quantos backups existem e a idade do mais antigo.
+          source scripts/s3.sh
+          stamps=$(s3_list headscale/ | grep -oE '[0-9]{8}T[0-9]{6}Z' | sort)
+          count=$(grep -c . <<<"$stamps")
+          oldest=$(head -1 <<<"$stamps" | sed -E 's/(....)(..)(..)T(..)(..)(..)Z/\1-\2-\3 \4:\5:\6/')
+          oldest_d=$(( ($(date +%s) - $(date -u -d "$oldest" +%s)) / 86400 ))
+          [[ $oldest_d -le 400 ]] || { echo "::error::backup com $oldest_d dias: a rotação não está rodando"; exit 1; }
+
           # RPO: idade do backup restaurado (chave headscale/AAAAMMDDTHHMMSSZ...).
           stamp=$(basename "$restored" .tar.gz.age)
           backup_epoch=$(date -u -d "$(sed -E 's/(....)(..)(..)T(..)(..)(..)Z/\1-\2-\3 \4:\5:\6/' <<<"$stamp")" +%s)
@@ -67,6 +75,7 @@ jobs:
             echo "rto=$((t1 - t0))"
             echo "rpo_h=$(( (t1 - backup_epoch) / 3600 ))"
             echo "nodes=$nodes"
+            echo "backups=$count (mais antigo: ${oldest_d} dias)"
           } >>"$GITHUB_OUTPUT"
 
       - name: Resultado
@@ -78,6 +87,7 @@ jobs:
           RTO: ${{ steps.drill.outputs.rto }}
           RPO: ${{ steps.drill.outputs.rpo_h }}
           NODES: ${{ steps.drill.outputs.nodes }}
+          BACKUPS: ${{ steps.drill.outputs.backups }}
         run: |
           month=$(TZ=America/Sao_Paulo date +%Y-%m)
           if [[ "$OUTCOME" == "success" ]]; then
@@ -85,8 +95,8 @@ jobs:
           else
             title="DR drill $month: FALHOU"
           fi
-          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n| Execução | %s |\n' \
-            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" \
+          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n| Backups no bucket | %s |\n| Execução | %s |\n' \
+            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" "${BACKUPS:-—}" \
             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
           echo "$body" >>"$GITHUB_STEP_SUMMARY"
           gh label create dr-drill --color 5319E7 --description "Restore drill mensal" --force >/dev/null
