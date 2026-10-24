@@ -51,6 +51,8 @@ jobs:
           severity: HIGH,CRITICAL
           format: sarif
           output: trivy-${{ steps.name.outputs.slug }}.sarif
+          # Sem isto o SARIF ignora o filtro e traz LOW/MEDIUM também.
+          limit-severities-for-sarif: true
 
       - name: Enviar para a aba Security
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
