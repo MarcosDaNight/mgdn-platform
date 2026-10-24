@@ -9,7 +9,7 @@ com orçamento-alvo de **R$ 100/mês**.
 congelado na release [`1.0.0`](https://github.com/MarcosDaNight/blocky-cloud-dns/releases/tag/1.0.0).
 O porquê da evolução está no [ADR 0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md).
 
-> 🚧 **Em construção.** O roteiro abaixo mostra o que já está pronto.
+> 🚧 **Em construção.** Fases 0 e 1 concluídas; o roteiro abaixo mostra o restante.
 
 ## Arquitetura-alvo
 
@@ -115,18 +115,27 @@ Se a tailnet estiver fora, defina `ssh_break_glass = true` no `terraform.tfvars`
 `make apply`: abre a porta 22 no security group, ainda filtrada pelo allowlist de casa,
 **sem recriar a VM**. Acesse com `make ssh HOST=<IP público>` e desligue depois.
 
+## Limitações conhecidas
+
+- **Clientes da tailnet aparecem como `172.19.0.1` no Blocky.** As consultas que chegam pela
+  tailnet passam pelo proxy do Docker e perdem o IP de origem. Bloqueio e cache funcionam;
+  perde-se a separação por aparelho em logs e métricas (as consultas de casa mantêm o IP
+  real). Correção prevista na fase 4.
+
 ## Roteiro
 
 Cada fase entrega algo utilizável e tem um critério de aceite verificável.
 
 - [x] **Fase 0: fundação.** Repositório, ADRs, CI e release `1.0.0` do v1.
-- [ ] **Fase 1: tailnet.** VM principal herdando o IP do v1, Headscale e o Blocky como DNS da
+- [x] **Fase 1: tailnet.** VM principal herdando o IP do v1, Headscale e o Blocky como DNS da
   tailnet. *Aceite: o celular no 4G bloqueia anúncios e a porta 22 fica fechada para a
-  internet.*
+  internet.* Concluída em 24/10/2026: a troca do v1 deixou a casa ~5 min sem DNS; o iPhone
+  no 4G passa pelo Blocky; a porta 22 fecha com 100% de perda em sondas externas.
 - [ ] **Fase 2: redundância.** Blocky secundário em br-se1. *Aceite: desligar a VM principal
   não derruba o DNS de casa.*
 - [ ] **Fase 3: backup e DR.** Backup imutável entre regiões e restore drill mensal
   automatizado. *Aceite: RTO e RPO medidos e publicados.*
 - [ ] **Fase 4: engenharia.** `terraform test`, SLOs com error budget, alertas com runbook,
-  imagens fixadas por digest e varredura no CI.
+  imagens fixadas por digest e varredura no CI, IP real dos clientes da tailnet no Blocky e
+  checklist mensal (herdado do v1).
 - [ ] **Fase 5: apps pessoais**, só pela tailnet (Vaultwarden primeiro).
