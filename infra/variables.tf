@@ -62,6 +62,13 @@ variable "repo_branch" {
   default     = "main"
 }
 
+variable "alert_ntfy_url" {
+  description = "URL do tópico ntfy que recebe os alertas do Alertmanager (ex.: https://ntfy.sh/<tópico-aleatório>?template=alertmanager). Vazio desativa (ADR 0009)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "secondary_healthcheck_url" {
   description = "URL de ping do healthchecks.io da VM secundária (check próprio, ADR 0005). Vazio desativa."
   type        = string
