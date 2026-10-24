@@ -1,0 +1,28 @@
+name: monthly-checklist
+
+# Abre uma issue com o checklist de manutenção todo dia 1º, às 09:00 (BRT).
+# A issue é atribuída ao dono do repo, então o GitHub notifica por e-mail/app.
+on:
+  schedule:
+    - cron: "0 12 1 * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  open-issue:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Abrir issue do mês
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Checklist mensal — $(TZ=America/Sao_Paulo date +%Y-%m)"
+          if gh issue list --state all --search "\"$title\" in:title" --json title -q '.[].title' | grep -qxF "$title"; then
+            echo "issue \"$title\" já existe"; exit 0
+          fi
+          gh label create manutencao --color 0E8A16 --description "Manutenção recorrente" --force
+          gh issue create --title "$title" --body-file .github/monthly-checklist.md \
+            --label manutencao --assignee "${{ github.repository_owner }}"

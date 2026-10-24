@@ -154,6 +154,13 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
   outro IP. Remova o nó antigo (`make tailnet-nodes`, depois `headscale nodes delete -i <id>`)
   e atualize o IP dela em `dns.nameservers.global` no Headscale (PR).
 
+### Checklist mensal
+
+Todo dia 1º o workflow `monthly-checklist` abre uma issue atribuída ao dono do repo com as
+verificações do mês: confirmar o hostname no No-IP, os três checks do healthchecks.io, a
+issue do DR drill, os aparelhos da tailnet, os PRs do Dependabot e os prazos das
+credenciais. Para abrir fora de hora: *Actions → monthly-checklist → Run workflow*.
+
 ### SSH de emergência (break-glass)
 
 Se a tailnet estiver fora, defina `ssh_break_glass = true` no `terraform.tfvars` e rode
