@@ -104,7 +104,7 @@ test: ## Testa resolução e bloqueio nas duas VMs (IPs públicos, de casa) e pe
 
 # --- Qualidade ------------------------------------------------------------------
 
-.PHONY: hooks fmt lint
+.PHONY: hooks fmt lint test-infra
 hooks: ## Instala os hooks do pre-commit neste clone
 	@pre-commit install
 
@@ -114,3 +114,6 @@ fmt: ## Formata o Terraform
 lint: ## pre-commit em todos os arquivos + terraform validate
 	@pre-commit run --all-files
 	@cd $(TFDIR) && $(TF) validate -no-color >/dev/null && echo "terraform validate ok"
+
+test-infra: ## terraform test (provider simulado, sem credenciais nem recursos)
+	@cd $(TFDIR) && $(TF) test
