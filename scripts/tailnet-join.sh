@@ -19,7 +19,16 @@ running() {
   tailscale status --json 2>/dev/null |
     python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("BackendState") == "Running" else 1)'
 }
-running && exit 0
+
+# Sem SNAT: por padrão o Tailscale aplica masquerade no tráfego da tailnet
+# encaminhado para outra interface (aqui, a bridge do Docker), e o Blocky veria
+# todo cliente como o gateway da bridge. Este host não é subnet router.
+no_snat() { tailscale set --snat-subnet-routes=false; }
+
+if running; then
+  no_snat
+  exit 0
+fi
 
 # O certificado Let's Encrypt sai no primeiro acesso HTTPS; espera ficar válido.
 # O /etc/hosts aponta o hostname para 127.0.0.1 (sem depender de hairpin NAT).
@@ -37,6 +46,7 @@ curl -fsS -m 5 "https://$HEADSCALE_HOSTNAME/health" >/dev/null || {
 # duplicado com outro IP.
 for _ in $(seq 1 12); do
   running && {
+    no_snat
     log "reconectado com o estado existente ($(tailscale ip -4))"
     exit 0
   }
@@ -67,7 +77,7 @@ else
 fi
 
 tailscale up --reset --login-server "https://$HEADSCALE_HOSTNAME" --authkey "$key" \
-  --hostname "$(hostname)" --accept-dns=false
+  --hostname "$(hostname)" --accept-dns=false --snat-subnet-routes=false
 
 ip=$(tailscale ip -4)
 log "registrado como $(hostname) ($ip)"
