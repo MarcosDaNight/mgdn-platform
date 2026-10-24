@@ -1,0 +1,7 @@
+# PRs de atualização. Novos ecossistemas (docker-compose, terraform) entram com as fases.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

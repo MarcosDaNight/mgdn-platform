@@ -1,0 +1,9 @@
+# Segredos e dados locais
+.env
+*.tfvars
+!*.tfvars.example
+*.tfstate
+*.tfstate.*
+.terraform/
+tfplan
+crash.log
