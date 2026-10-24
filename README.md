@@ -91,17 +91,19 @@ docs/adr/                  decisões de arquitetura
 | `make status` | commit aplicado, containers, tailnet, timers, RAM e disco |
 | `make test` | resolve e bloqueia pelo IP público e pela tailnet |
 | `make tailnet-nodes` | aparelhos na tailnet |
-| `make tailnet-register KEY=…` | aprova um aparelho novo |
+| `make tailnet-register AUTH_ID=… NAME=…` | aprova (e nomeia) um aparelho novo |
 | `make allowlist` | IP de casa liberado na porta 53 e últimas trocas |
 | `make querylog` / `make logs` | domínios bloqueados / logs dos containers |
 | `make tunnel` | Grafana, Prometheus e API do Blocky em `localhost` |
 
 ### Colocar um aparelho na tailnet
 
-- **iPhone/Android:** instale o app do Tailscale, escolha *servidor alternativo* (no iOS:
-  *Ajustes → Tailscale → Alternate Coordination Server URL*) e informe
-  `https://mgdn-platform.duckdns.org`. Ao fazer login, o app mostra um comando
-  `headscale nodes register ... --key <chave>`: rode `make tailnet-register KEY=<chave>`.
+- **iPhone/Android:** no app do Tailscale, toque em *Log in…*, abra o menu **⋯** no canto
+  superior direito, escolha *Use custom coordination server* e informe
+  `https://mgdn-platform.duckdns.org`. O app mostra
+  `headscale auth register --auth-id <id> --user USERNAME`: rode
+  `make tailnet-register AUTH_ID=<id> NAME=iphone` (o iOS se registra como `localhost`;
+  o `NAME` renomeia). Em *DNS settings*, mantenha **Use Tailscale DNS settings** ligado.
 - **Linux:** `sudo tailscale up --login-server https://mgdn-platform.duckdns.org --authkey <chave>`,
   com a chave gerada por `make tailnet-key` (uso único, vale 30 min).
 

@@ -41,9 +41,10 @@ destroy: ## Destroi tudo, inclusive o IP público (o roteador de casa precisaria
 tailnet-nodes: ## Lista os aparelhos da tailnet
 	@$(SSH) '$(HS) nodes list'
 
-tailnet-register: ## Aprova um aparelho que mostrou "headscale nodes register --key ..." (KEY=<chave>)
-	@test -n "$(KEY)" || { echo "uso: make tailnet-register KEY=<chave mostrada no aparelho>"; exit 1; }
-	@$(SSH) '$(HS) nodes register --user platform --key $(KEY)'
+tailnet-register: ## Aprova um aparelho que mostrou "headscale auth register --auth-id ..." (AUTH_ID=<id>)
+	@test -n "$(AUTH_ID)" || { echo "uso: make tailnet-register AUTH_ID=<id mostrado no aparelho> [NAME=iphone]"; exit 1; }
+	@$(SSH) '$(HS) auth register --auth-id $(AUTH_ID) --user platform'
+	@test -z "$(NAME)" || $(SSH) 'id=$$($(HS) nodes list -o json | python3 -c "import json,sys;print(max(n[\"id\"] for n in json.load(sys.stdin)))"); $(HS) nodes rename -i $$id $(NAME)'
 
 tailnet-key: ## Chave de uso único (30 min) para `tailscale up --authkey` em Linux
 	@$(SSH) '$(HS) preauthkeys create --user $$($(HS) users list -n platform -o json | python3 -c "import json,sys;print(json.load(sys.stdin)[0][\"id\"])") --expiration 30m'
