@@ -55,6 +55,7 @@ flowchart LR
 | [0005](docs/adr/0005-dns-secundario-em-outra-regiao.md) | DNS secundário em outra região |
 | [0006](docs/adr/0006-backup-imutavel-e-restore-drill.md) | Backup imutável do Headscale e restore drill mensal |
 | [0007](docs/adr/0007-rotacao-dos-backups.md) | Rotação dos backups sem lifecycle do provedor |
+| [0008](docs/adr/0008-cadeia-de-suprimentos.md) | Cadeia de suprimentos: digests fixos e varredura das imagens |
 
 ## Orçamento
 
