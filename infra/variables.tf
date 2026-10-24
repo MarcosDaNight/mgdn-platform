@@ -44,7 +44,7 @@ variable "ssh_break_glass" {
 }
 
 variable "healthcheck_url" {
-  description = "URL de ping do healthchecks.io. Vazio desativa."
+  description = "URL de ping do healthchecks.io da VM principal. Vazio desativa."
   type        = string
   default     = ""
   sensitive   = true
@@ -60,4 +60,18 @@ variable "repo_branch" {
   description = "Branch acompanhada pelo GitOps."
   type        = string
   default     = "main"
+}
+
+variable "secondary_healthcheck_url" {
+  description = "URL de ping do healthchecks.io da VM secundária (check próprio, ADR 0005). Vazio desativa."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "secondary_tailnet_authkey" {
+  description = "Chave de uso único (make tailnet-key) para a secundária entrar na tailnet no primeiro boot. Só é lida na criação da VM."
+  type        = string
+  default     = ""
+  sensitive   = true
 }
