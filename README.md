@@ -160,13 +160,6 @@ Se a tailnet estiver fora, defina `ssh_break_glass = true` no `terraform.tfvars`
 `make apply`: abre a porta 22 no security group, ainda filtrada pelo allowlist de casa,
 **sem recriar a VM**. Acesse com `make ssh HOST=<IP público>` e desligue depois.
 
-## Limitações conhecidas
-
-- **Clientes da tailnet aparecem como `172.19.0.1` no Blocky.** As consultas que chegam pela
-  tailnet passam pelo proxy do Docker e perdem o IP de origem. Bloqueio e cache funcionam;
-  perde-se a separação por aparelho em logs e métricas (as consultas de casa mantêm o IP
-  real). Correção prevista na fase 4.
-
 ## Roteiro
 
 Cada fase entrega algo utilizável e tem um critério de aceite verificável.
