@@ -1,0 +1,14 @@
+[Unit]
+Description=mgdn-platform: allowlist de origem (IP de casa via DDNS) para DNS e SSH
+After=network-online.target
+Wants=network-online.target
+# No boot, o filtro precisa existir antes de os containers publicarem a porta 53.
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mgdn-platform/scripts/allowlist.sh
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

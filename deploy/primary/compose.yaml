@@ -1,0 +1,94 @@
+# Stack da VM principal (papel "primary"). Portas públicas: 53 (DNS, origem filtrada
+# no host), 80/443 (Headscale). UIs e APIs ficam em 127.0.0.1 e são acessadas pela
+# tailnet (`make tunnel`). Limites de memória dimensionados para a BV2-2-10.
+name: mgdn
+
+services:
+  headscale:
+    image: headscale/headscale:0.29.6
+    restart: unless-stopped
+    command: ["serve"]
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+    volumes:
+      - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
+      - headscale-data:/var/lib/headscale
+      - headscale-run:/var/run/headscale
+    mem_limit: 128m
+
+  blocky:
+    image: spx01/blocky:v0.35.0
+    restart: unless-stopped
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+      - "127.0.0.1:4000:4000/tcp"
+    environment:
+      TZ: America/Sao_Paulo
+    volumes:
+      - ../common/blocky/config.yml:/app/config.yml:ro
+      - blocky-cache:/app/cache
+      - blocky-logs:/logs
+    mem_limit: 384m
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=1GB
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    mem_limit: 256m
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    mem_limit: 64m
+
+  grafana:
+    image: grafana/grafana:13.2.4-slim
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      # Senha do admin gerada no bootstrap da VM (nunca versionada).
+      - path: /etc/mgdn-platform/grafana.env
+        required: false
+    environment:
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/blocky.json
+      # A imagem slim baixa 18 plugins no boot (~500 MB no volume); só o datasource
+      # Prometheus é usado. Ele é instalado antes do provisioning e os demais são
+      # desativados (o que também os tira da lista de instalação).
+      GF_PLUGINS_PREINSTALL_SYNC: prometheus
+      GF_PLUGINS_DISABLE_PLUGINS: >-
+        grafana-lokiexplore-app,grafana-pyroscope-app,grafana-exploretraces-app,grafana-metricsdrilldown-app,grafana-advisor-app,elasticsearch,tempo,zipkin,opentsdb,stackdriver,mssql,jaeger,loki,mysql,influxdb,grafana-postgresql-datasource,grafana-pyroscope-datasource
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    # Medido: ~190 MB em uso ocioso; 192m deixava o Grafana no teto do cgroup.
+    mem_limit: 320m
+
+volumes:
+  headscale-data:
+  headscale-run:
+  blocky-cache:
+  blocky-logs:
+  prometheus-data:
+  grafana-data:

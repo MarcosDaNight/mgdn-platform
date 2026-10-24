@@ -1,0 +1,8 @@
+[Unit]
+Description=mgdn-platform: limpeza semanal de disco (cache do apt e journal)
+
+[Service]
+Type=oneshot
+# O unattended-upgrades guarda cada .deb baixado (AutocleanInterval=0 no Ubuntu).
+ExecStart=/usr/bin/apt-get clean
+ExecStart=/usr/bin/journalctl --vacuum-size=200M

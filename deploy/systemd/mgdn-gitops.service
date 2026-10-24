@@ -1,0 +1,10 @@
+[Unit]
+Description=mgdn-platform: reconcilia a VM com o repositório Git
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mgdn-platform/scripts/gitops-sync.sh
+TimeoutStartSec=15min
