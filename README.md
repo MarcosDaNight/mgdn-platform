@@ -9,7 +9,7 @@ com orçamento-alvo de **R$ 100/mês**.
 congelado na release [`1.0.0`](https://github.com/MarcosDaNight/blocky-cloud-dns/releases/tag/1.0.0).
 O porquê da evolução está no [ADR 0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md).
 
-> 🚧 **Em construção.** Fases 0 a 2 concluídas; o roteiro abaixo mostra o restante.
+> 🚧 **Em construção.** Fases 0 a 3 concluídas; o roteiro abaixo mostra o restante.
 
 ## Arquitetura-alvo
 
@@ -132,7 +132,10 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
   Tailscale da VM principal. Diariamente às 03:15, cifrado com `age`, num bucket com
   **object lock de 30 dias** em br-se1. Nem as credenciais do dono apagam um backup recente.
 - **VM principal recriada:** o primeiro deploy restaura o backup mais recente antes de subir
-  o Headscale. Os aparelhos seguem na tailnet e a VM volta como `100.64.0.1`.
+  o Headscale. Os aparelhos seguem na tailnet e a VM volta como `100.64.0.1`. **Antes do
+  `make apply`, rode `make headscale-drain`**: ele faz um backup novo e para o Headscale de
+  forma limpa. Sem isso, clientes Linux com conexão longa ficam até ~15 min presos a uma
+  conexão TCP meio aberta com a VM destruída (o túnel de dados não cai nesse meio-tempo).
 - **Restore drill:** todo dia 2 o workflow `dr-drill` restaura o backup num runner
   descartável, confere os nós e abre uma issue `dr-drill` com RTO e RPO. Uma falha fica
   aberta e notifica. Para rodar fora de hora: *Actions → dr-drill → Run workflow*.
@@ -171,8 +174,16 @@ Cada fase entrega algo utilizável e tem um critério de aceite verificável.
   não derruba o DNS de casa.* Concluída em 24/10/2026: com o Blocky da principal parado, o
   resolvedor do sistema seguiu respondendo pela secundária (90–170 ms) e bloqueando; o log
   da secundária registrou as consultas.
-- [ ] **Fase 3: backup e DR.** Backup imutável entre regiões e restore drill mensal
-  automatizado. *Aceite: RTO e RPO medidos e publicados.*
+- [x] **Fase 3: backup e DR.** Backup imutável entre regiões e restore drill mensal
+  automatizado. *Aceite: RTO e RPO medidos e publicados.* Concluída em 24/10/2026:
+
+  | Medição | Resultado |
+  |---|---|
+  | Restore drill (runner descartável) | RTO **6 s**, RPO **0 h** ([issue #9](https://github.com/MarcosDaNight/mgdn-platform/issues/9)) |
+  | Recriação real da VM principal: apply → Headscale servindo o estado restaurado | **172 s** |
+  | RPO da recriação (backup → apply) | **6 min** |
+  | DNS fora do ar durante a recriação | **0** (a secundária atendeu casa e tailnet) |
+  | Aparelhos que precisaram entrar de novo | **0** (mesmas `machine_key` e IPs) |
 - [ ] **Fase 4: engenharia.** `terraform test`, SLOs com error budget, alertas com runbook,
   imagens fixadas por digest e varredura no CI, IP real dos clientes da tailnet no Blocky e
   checklist mensal (herdado do v1).

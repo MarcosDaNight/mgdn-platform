@@ -37,7 +37,7 @@ destroy: ## Destroi tudo, inclusive o IP público (o roteador de casa precisaria
 
 # --- Tailnet --------------------------------------------------------------------
 
-.PHONY: tailnet-nodes tailnet-register tailnet-key
+.PHONY: tailnet-nodes tailnet-register tailnet-key headscale-drain
 tailnet-nodes: ## Lista os aparelhos da tailnet
 	@$(SSH) '$(HS) nodes list'
 
@@ -48,6 +48,10 @@ tailnet-register: ## Aprova um aparelho que mostrou "headscale auth register --a
 
 tailnet-key: ## Chave de uso único (30 min) para `tailscale up --authkey` em Linux
 	@$(SSH) '$(HS) preauthkeys create --user $$($(HS) users list -n platform -o json | python3 -c "import json,sys;print(json.load(sys.stdin)[0][\"id\"])") --expiration 30m'
+
+headscale-drain: ## Antes de recriar a VM principal: backup novo e Headscale parado de forma limpa
+	@$(SSH) 'sudo systemctl start mgdn-backup.service && sudo journalctl -u mgdn-backup -n 1 -o cat --no-pager && $(COMPOSE) stop headscale'
+	@echo "Headscale parado: os clientes reconectam assim que a VM nova subir. Agora: make apply"
 
 # --- Operação -------------------------------------------------------------------
 
