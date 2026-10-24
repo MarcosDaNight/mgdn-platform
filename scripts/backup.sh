@@ -50,3 +50,7 @@ key="headscale/$ts.tar.gz.age"
 s3_put "$out" "$key"
 log "OK: $key ($(stat -c %s "$out") bytes)"
 ping_hc ""
+
+# Rotação (ADR 0007). Não afeta o sucesso do backup: o lock protege o recente e a
+# próxima execução tenta de novo.
+"$repo/scripts/prune.sh" || log "AVISO: rotação falhou"

@@ -32,3 +32,29 @@ s3_list() {
     [[ -n "$token" ]] || break
   done
 }
+
+# s3_list_versions <prefixo>: "chave<TAB>versionId<TAB>lastModified" de cada versão
+# (delete markers ignorados), seguindo a paginação.
+s3_list_versions() {
+  local km="" vm="" page
+  while :; do
+    page=$(s3_curl -G "${BACKUP_ENDPOINT}/${BACKUP_BUCKET}" --data-urlencode "versions" \
+      --data-urlencode "prefix=$1" \
+      ${km:+--data-urlencode "key-marker=${km}"} ${vm:+--data-urlencode "version-id-marker=${vm}"})
+    python3 -c '
+import re, sys
+x = sys.stdin.read()
+for v in re.findall(r"<Version>(.*?)</Version>", x, re.S):
+    g = lambda t: re.search(rf"<{t}>([^<]*)</{t}>", v).group(1)
+    print(g("Key"), g("VersionId"), g("LastModified"), sep="\t")' <<<"$page"
+    grep -q '<IsTruncated>true</IsTruncated>' <<<"$page" || break
+    km=$(sed -n 's:.*<NextKeyMarker>\([^<]*\)</NextKeyMarker>.*:\1:p' <<<"$page")
+    vm=$(sed -n 's:.*<NextVersionIdMarker>\([^<]*\)</NextVersionIdMarker>.*:\1:p' <<<"$page")
+  done
+}
+
+# s3_delete_version <chave> <versionId>: apaga a versão de fato (não cria delete
+# marker). O object lock recusa enquanto a retenção não venceu.
+s3_delete_version() {
+  s3_curl -o /dev/null -X DELETE -G "${BACKUP_ENDPOINT}/${BACKUP_BUCKET}/$1" --data-urlencode "versionId=$2"
+}
