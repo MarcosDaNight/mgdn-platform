@@ -1,0 +1,81 @@
+# Headscale: servidor de controle da tailnet (ADR 0003).
+# Referência: https://github.com/juanfont/headscale/blob/v0.29.6/config-example.yaml
+
+server_url: https://mgdn-platform.duckdns.org
+listen_addr: 0.0.0.0:443
+# Só na rede do compose (não publicado), para o Prometheus.
+metrics_listen_addr: 0.0.0.0:9090
+grpc_listen_addr: 127.0.0.1:50443
+grpc_allow_insecure: false
+
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+
+# Sequencial: o primeiro nó registrado (a própria VM) recebe 100.64.0.1, que é o
+# DNS da tailnet abaixo.
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+
+# NAT traversal pelos DERPs públicos da Tailscale (só retransmitem WireGuard
+# cifrado); sem DERP próprio e sem a porta 3478/udp.
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  paths: []
+  auto_update_enabled: true
+  update_frequency: 3h
+
+disable_check_updates: true
+
+node:
+  expiry: 0
+  ephemeral:
+    inactivity_timeout: 30m
+
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+
+# HTTPS automático (HTTP-01 na porta 80).
+acme_url: https://acme-v02.api.letsencrypt.org/directory
+acme_email: ""
+tls_letsencrypt_hostname: mgdn-platform.duckdns.org
+tls_letsencrypt_cache_dir: /var/lib/headscale/cache
+tls_letsencrypt_challenge_type: HTTP-01
+tls_letsencrypt_listen: ":http"
+
+log:
+  level: info
+  format: text
+
+# Sem arquivo de política: todos os nós do único usuário se alcançam.
+policy:
+  mode: file
+  path: ""
+
+# O Blocky da VM principal é o DNS de toda a tailnet: bloqueio em qualquer rede.
+dns:
+  magic_dns: true
+  base_domain: tail.mgdn
+  override_local_dns: true
+  nameservers:
+    global:
+      - 100.64.0.1
+    split: {}
+  search_domains: []
+  extra_records: []
+
+unix_socket: /var/run/headscale/headscale.sock
+unix_socket_permission: "0770"
+
+logtail:
+  enabled: false
+
+taildrop:
+  enabled: true

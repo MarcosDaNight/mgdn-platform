@@ -1,0 +1,9 @@
+[Unit]
+Description=mgdn-platform: atualiza o allowlist a partir do DDNS a cada 2 minutos
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=2min
+
+[Install]
+WantedBy=timers.target

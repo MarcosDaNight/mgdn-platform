@@ -1,0 +1,7 @@
+[Unit]
+Description=mgdn-platform: verifica resolução e bloqueio de DNS
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mgdn-platform/scripts/healthcheck.sh

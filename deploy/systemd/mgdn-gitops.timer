@@ -1,0 +1,10 @@
+[Unit]
+Description=mgdn-platform: GitOps sync a cada 2 minutos
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=2min
+RandomizedDelaySec=15s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=mgdn-platform: limpeza semanal de disco
+
+[Timer]
+OnCalendar=Sun 05:00
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

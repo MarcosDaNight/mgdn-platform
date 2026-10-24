@@ -1,0 +1,85 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/0xERR0R/blocky/v0.35.0/docs/config.schema.json
+#
+# Configuração do Blocky. Qualquer alteração aqui, após merge na main, é aplicada
+# automaticamente na VM em até ~2 min (GitOps pull) — validada antes com `blocky validate`
+# e revertida sozinha se o DNS não responder depois do restart.
+#
+# Referência completa: https://0xerr0r.github.io/blocky/latest/configuration/
+
+upstreams:
+  init:
+    # Sobe servindo DNS mesmo que algum upstream esteja fora no boot.
+    strategy: fast
+  groups:
+    default:
+      # Upstreams criptografados (DoH): o provedor da nuvem não vê suas consultas.
+      - https://cloudflare-dns.com/dns-query
+      - https://dns.quad9.net/dns-query
+  strategy: parallel_best
+  timeout: 2s
+
+# Resolve os hostnames dos upstreams DoH e das listas.
+bootstrapDns:
+  - tcp+udp:1.1.1.1
+  - tcp+udp:9.9.9.9
+
+connectIPVersion: v4
+
+blocking:
+  denylists:
+    ads:
+      # HaGeZi Multi PRO: anúncios, rastreadores, telemetria, malware (~230k domínios).
+      # Use sempre o formato *wildcard* (`*.dominio`): no Blocky, uma entrada simples
+      # `dominio` NÃO cobre subdomínios. Outras variantes: https://github.com/hagezi/dns-blocklists
+      - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro.txt
+      # Bloqueios manuais, um por linha: `*.exemplo.com` (domínio + subdomínios),
+      # `exemplo.com` (só o exato) ou `/regex/`.
+      - |
+        # *.exemplo.com
+  allowlists:
+    ads:
+      # Liberações manuais (mesmo formato) — use quando algo legítimo quebrar.
+      - |
+        # *.exemplo-liberado.com
+  clientGroupsBlock:
+    default:
+      - ads
+  blockType: zeroIp
+  blockTTL: 1m
+  loading:
+    refreshPeriod: 24h
+    strategy: fast
+    concurrency: 2
+    downloads:
+      timeout: 60s
+      attempts: 5
+      cooldown: 10s
+      # Cache em disco: se o host da lista cair, o Blocky reinicia com a última cópia.
+      cachePath: /app/cache/lists
+
+caching:
+  minTime: 5m
+  maxTime: 30m
+  # Limites para caber confortavelmente em 1 GB de RAM.
+  maxItemsCount: 20000
+  prefetching: true
+  prefetchMaxItemsCount: 5000
+  cacheTimeNegative: 30m
+
+prometheus:
+  enable: true
+  path: /metrics
+
+# Log de consultas em CSV (volume `blocky-logs`), 7 dias. Útil para descobrir o que
+# está sendo bloqueado: `make querylog`.
+queryLog:
+  type: csv
+  target: /logs
+  logRetentionDays: 7
+
+ports:
+  dns: 53
+  http: 4000
+
+log:
+  level: info
