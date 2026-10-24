@@ -32,6 +32,7 @@ module "primary" {
 
   name         = "mgdn-primary"
   role         = "primary"
+  vpc_id       = lookup(var.vpc_ids, "ne1", null)
   machine_type = "BV2-2-10"
   ssh_key_name = var.ssh_key_name
   repo_url     = var.repo_url
@@ -56,6 +57,7 @@ module "secondary" {
 
   name         = "mgdn-secondary"
   role         = "secondary"
+  vpc_id       = lookup(var.vpc_ids, "se1", null)
   machine_type = "BV1-1-10"
   ssh_key_name = var.ssh_key_name
   repo_url     = var.repo_url

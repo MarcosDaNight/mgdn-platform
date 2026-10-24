@@ -3,6 +3,12 @@ variable "name" {
   type        = string
 }
 
+variable "vpc_id" {
+  description = "VPC da VM. Vazio usa a VPC default da região."
+  type        = string
+  default     = null
+}
+
 variable "role" {
   description = "Papel do host no GitOps: aplica deploy/<role>/compose.yaml."
   type        = string
