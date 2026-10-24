@@ -1,0 +1,10 @@
+[Unit]
+Description=mgdn-platform: backup diário do Headscale
+
+[Timer]
+OnCalendar=*-*-* 03:15
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

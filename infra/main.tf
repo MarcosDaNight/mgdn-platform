@@ -7,6 +7,17 @@ locals {
     ssh = { protocol = "tcp", port = 22, description = "SSH break-glass (origem filtrada no host)" }
   } : {}
 
+  # Backup imutável em br-se1, longe da principal (ADR 0006).
+  backup_env = var.backup == null ? {} : {
+    BACKUP_ENDPOINT        = "https://br-se1.magaluobjects.com"
+    BACKUP_REGION          = "br-se1"
+    BACKUP_BUCKET          = "mgdn-platform-backup-b29a4ccd"
+    BACKUP_ACCESS_KEY      = var.backup.access_key
+    BACKUP_SECRET_KEY      = var.backup.secret_key
+    BACKUP_AGE_IDENTITY    = var.backup.age_identity
+    BACKUP_HEALTHCHECK_URL = var.backup.healthcheck_url
+  }
+
   common_env = {
     HEALTHCHECK_URL     = var.healthcheck_url
     HOME_DDNS_HOST      = var.home_ddns_host
@@ -25,7 +36,7 @@ module "primary" {
   ssh_key_name = var.ssh_key_name
   repo_url     = var.repo_url
   repo_branch  = var.repo_branch
-  env          = local.common_env
+  env          = merge(local.common_env, local.backup_env)
 
   public_ports = merge(local.dns_ports, local.ssh_port, {
     acme  = { protocol = "tcp", port = 80, description = "ACME HTTP-01 (Let's Encrypt)" }

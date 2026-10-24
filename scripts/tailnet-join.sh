@@ -15,10 +15,11 @@ expected_ip=100.64.0.1
 
 log() { echo "[tailnet] $*"; }
 
-if tailscale status --json 2>/dev/null |
-  python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("BackendState") == "Running" else 1)'; then
-  exit 0
-fi
+running() {
+  tailscale status --json 2>/dev/null |
+    python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("BackendState") == "Running" else 1)'
+}
+running && exit 0
 
 # O certificado Let's Encrypt sai no primeiro acesso HTTPS; espera ficar válido.
 # O /etc/hosts aponta o hostname para 127.0.0.1 (sem depender de hairpin NAT).
@@ -30,6 +31,17 @@ curl -fsS -m 5 "https://$HEADSCALE_HOSTNAME/health" >/dev/null || {
   log "headscale sem HTTPS válido em https://$HEADSCALE_HOSTNAME"
   exit 1
 }
+
+# Estado restaurado do backup (VM recriada): o nó reconecta sozinho com a mesma
+# identidade assim que o Headscale responde. Registrar de novo criaria um nó
+# duplicado com outro IP.
+for _ in $(seq 1 12); do
+  running && {
+    log "reconectado com o estado existente ($(tailscale ip -4))"
+    exit 0
+  }
+  sleep 5
+done
 
 if [[ "$ROLE" == "primary" ]]; then
   container=$(docker ps -q --filter label=com.docker.compose.service=headscale)
