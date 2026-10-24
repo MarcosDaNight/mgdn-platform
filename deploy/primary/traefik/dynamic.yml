@@ -1,0 +1,47 @@
+# Rotas (ADR 0010). Apps da tailnet só aceitam origem 100.64.0.0/10.
+http:
+  routers:
+    headscale:
+      rule: Host(`headscale.mgdn.com.br`)
+      entryPoints: [websecure]
+      service: headscale
+      tls:
+        certResolver: cloudflare
+    # Transição: aparelhos registrados com o DuckDNS seguem funcionando.
+    headscale-legacy:
+      rule: Host(`mgdn-platform.duckdns.org`)
+      entryPoints: [websecure]
+      service: headscale
+      tls:
+        certResolver: alpn
+    vault:
+      rule: Host(`vault.mgdn.com.br`)
+      entryPoints: [websecure]
+      service: vaultwarden
+      middlewares: [tailnet-only, security-headers]
+      tls:
+        certResolver: cloudflare
+
+  middlewares:
+    tailnet-only:
+      ipAllowList:
+        sourceRange:
+          - 100.64.0.0/10
+          - fd7a:115c:a1e0::/48
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        contentTypeNosniff: true
+        frameDeny: true
+        referrerPolicy: same-origin
+
+  services:
+    headscale:
+      loadBalancer:
+        servers:
+          - url: http://headscale:8080
+    vaultwarden:
+      loadBalancer:
+        servers:
+          - url: http://vaultwarden:80

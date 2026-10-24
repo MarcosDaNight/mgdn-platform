@@ -1,6 +1,6 @@
 # Stack da VM principal (papel "primary"). Portas públicas: 53 (DNS, origem filtrada
-# no host), 80/443 (Headscale). UIs e APIs ficam em 127.0.0.1 e são acessadas pela
-# tailnet (`make tunnel`). Limites de memória dimensionados para a BV2-2-10.
+# no host) e 443 (Traefik: Headscale e apps da tailnet). UIs e APIs ficam em
+# 127.0.0.1 e são acessadas pela tailnet (`make tunnel`). Limites de memória dimensionados para a BV2-2-10.
 name: mgdn
 
 services:
@@ -8,13 +8,41 @@ services:
     image: headscale/headscale:0.29.6@sha256:cabe84f0699913dbca9320f0883dca7565dd08df3c5be29edfabbebeff763966
     restart: unless-stopped
     command: ["serve"]
-    ports:
-      - "80:80/tcp"
-      - "443:443/tcp"
     volumes:
       - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
       - headscale-data:/var/lib/headscale
       - headscale-run:/var/run/headscale
+    mem_limit: 128m
+
+  traefik:
+    image: traefik:v3.7.16@sha256:c8a121e4bb1347e8fd52657fab12f2cb70b68f8a018895e2068f92c9e519b9c2
+    restart: unless-stopped
+    ports:
+      - "443:443/tcp"
+    environment:
+      # Token da Cloudflare (DNS-01), escrito pelo gitops-sync fora do repo.
+      CF_DNS_API_TOKEN_FILE: /run/secrets/cf-dns-token
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - /etc/mgdn-platform/traefik:/run/secrets:ro
+      - traefik-acme:/letsencrypt
+    mem_limit: 128m
+
+  vaultwarden:
+    image: vaultwarden/server:1.37.4-alpine@sha256:19ea2b669945d842dadc3d500f2d6a795866a003330f59a47b9634658bae98bb
+    restart: unless-stopped
+    environment:
+      DOMAIN: https://vault.mgdn.com.br
+      # Aberto só até a criação da conta do dono; depois um PR fecha (ADR 0010).
+      SIGNUPS_ALLOWED: "true"
+      INVITATIONS_ALLOWED: "false"
+      PASSWORD_HINTS_ALLOWED: "false"
+      SHOW_PASSWORD_HINT: "false"
+      IP_HEADER: X-Forwarded-For
+      LOG_LEVEL: warn
+    volumes:
+      - vaultwarden-data:/data
     mem_limit: 128m
 
   blocky:
@@ -109,6 +137,8 @@ services:
     mem_limit: 320m
 
 volumes:
+  traefik-acme:
+  vaultwarden-data:
   headscale-data:
   headscale-run:
   blocky-cache:

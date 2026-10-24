@@ -1,12 +1,17 @@
 # Headscale: servidor de controle da tailnet (ADR 0003).
 # Referência: https://github.com/juanfont/headscale/blob/v0.29.6/config-example.yaml
 
-server_url: https://mgdn-platform.duckdns.org
-listen_addr: 0.0.0.0:443
+server_url: https://headscale.mgdn.com.br
+# Atrás do Traefik (ADR 0010): HTTP interno, o TLS é terminado no proxy.
+listen_addr: 0.0.0.0:8080
 # Só na rede do compose (não publicado), para o Prometheus.
 metrics_listen_addr: 0.0.0.0:9090
 grpc_listen_addr: 127.0.0.1:50443
 grpc_allow_insecure: false
+
+# O Traefik conecta pela rede do Docker; só dele os cabeçalhos X-Forwarded-* valem.
+trusted_proxies:
+  - 172.16.0.0/12
 
 noise:
   private_key_path: /var/lib/headscale/noise_private.key
@@ -42,13 +47,10 @@ database:
     path: /var/lib/headscale/db.sqlite
     write_ahead_log: true
 
-# HTTPS automático (HTTP-01 na porta 80).
-acme_url: https://acme-v02.api.letsencrypt.org/directory
-acme_email: ""
-tls_letsencrypt_hostname: mgdn-platform.duckdns.org
-tls_letsencrypt_cache_dir: /var/lib/headscale/cache
-tls_letsencrypt_challenge_type: HTTP-01
-tls_letsencrypt_listen: ":http"
+# TLS no Traefik (ADR 0010).
+tls_letsencrypt_hostname: ""
+tls_cert_path: ""
+tls_key_path: ""
 
 log:
   level: info
