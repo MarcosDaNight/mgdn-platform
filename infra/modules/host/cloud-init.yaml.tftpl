@@ -1,0 +1,63 @@
+#cloud-config
+# Bootstrap mínimo: prepara o host e entrega o controle ao GitOps (scripts/gitops-sync.sh).
+# Tudo que roda na VM (containers, configs, units systemd) vem do repositório.
+
+timezone: America/Sao_Paulo
+# Sem o stub do systemd-resolved o hostname local deixa de resolver; o /etc/hosts cobre.
+manage_etc_hosts: localhost
+package_update: true
+package_upgrade: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - git
+  - dnsutils
+  - curl
+  - nftables
+
+swap:
+  filename: /swapfile
+  size: 1G
+
+write_files:
+  # Libera a porta 53 do host (o stub do systemd-resolved ocupa 127.0.0.53:53).
+  - path: /etc/systemd/resolved.conf.d/no-stub.conf
+    content: |
+      [Resolve]
+      DNSStubListener=no
+  # Logs de container com rotação: o disco é de 10 GB.
+  - path: /etc/docker/daemon.json
+    content: |
+      {"log-driver": "local", "log-opts": {"max-size": "10m", "max-file": "3"}}
+  - path: /etc/mgdn-platform/env
+    permissions: "0600"
+    content: |
+%{ for k, v in env ~}
+      ${k}=${v}
+%{ endfor ~}
+  # Patches de segurança automáticos, com reboot de madrugada se necessário.
+  - path: /etc/apt/apt.conf.d/52mgdn-platform
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+
+runcmd:
+  - ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+  - systemctl restart systemd-resolved
+%{ for host, ip in hosts ~}
+  - echo "${ip} ${host}" >> /etc/hosts
+%{ endfor ~}
+  # Tailscale pelo repositório oficial (o registro na tailnet é feito pelo GitOps).
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
+  - apt-get update -qq && apt-get install -y -qq tailscale
+  - systemctl enable --now docker tailscaled
+  - install -m 0600 /dev/null /etc/mgdn-platform/grafana.env
+  - echo "GF_SECURITY_ADMIN_PASSWORD=$(openssl rand -hex 16)" > /etc/mgdn-platform/grafana.env
+  - usermod -aG docker ubuntu
+  - |
+    for i in $(seq 1 60); do
+      git clone --quiet --branch "${repo_branch}" "${repo_url}" /opt/mgdn-platform && break
+      echo "repositório indisponível, tentando novamente em 30s ($i/60)"; sleep 30
+    done
+  - /opt/mgdn-platform/scripts/gitops-sync.sh --force

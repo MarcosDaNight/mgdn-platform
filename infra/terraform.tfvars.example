@@ -1,0 +1,6 @@
+# Copie para terraform.tfvars (gitignored).
+home_ddns_host = "minha-casa.ddns.net"
+
+# extra_allowed_cidrs = ["198.51.100.7/32"]
+# healthcheck_url     = "https://hc-ping.com/<uuid>"
+# ssh_break_glass     = true   # só se a tailnet estiver fora
