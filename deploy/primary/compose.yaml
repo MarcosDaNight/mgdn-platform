@@ -5,7 +5,7 @@ name: mgdn
 
 services:
   headscale:
-    image: headscale/headscale:0.29.6
+    image: headscale/headscale:0.29.6@sha256:cabe84f0699913dbca9320f0883dca7565dd08df3c5be29edfabbebeff763966
     restart: unless-stopped
     command: ["serve"]
     ports:
@@ -18,7 +18,7 @@ services:
     mem_limit: 128m
 
   blocky:
-    image: spx01/blocky:v0.35.0
+    image: spx01/blocky:v0.35.0@sha256:4f165b63db0d76c96ecc47c7a8f57caeedc003a912bdce29abb0e283ce02e16b
     restart: unless-stopped
     ports:
       - "53:53/udp"
@@ -33,7 +33,7 @@ services:
     mem_limit: 384m
 
   prometheus:
-    image: prom/prometheus:v3.15.1
+    image: prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -48,7 +48,7 @@ services:
     mem_limit: 256m
 
   node-exporter:
-    image: prom/node-exporter:v1.12.1
+    image: prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
     restart: unless-stopped
     command:
       - --path.rootfs=/host
@@ -58,7 +58,7 @@ services:
     mem_limit: 64m
 
   grafana:
-    image: grafana/grafana:13.2.4-slim
+    image: grafana/grafana:13.2.4-slim@sha256:e1b9840daaea5ebbe9ac585257ed88cf7ea569d28d5058231b0778f8898ef736
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"

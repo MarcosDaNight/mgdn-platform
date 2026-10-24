@@ -5,7 +5,7 @@ name: mgdn
 
 services:
   blocky:
-    image: spx01/blocky:v0.35.0
+    image: spx01/blocky:v0.35.0@sha256:4f165b63db0d76c96ecc47c7a8f57caeedc003a912bdce29abb0e283ce02e16b
     restart: unless-stopped
     ports:
       - "53:53/udp"
