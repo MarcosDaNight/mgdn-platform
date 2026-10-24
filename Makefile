@@ -9,7 +9,8 @@ ENV_ABS := set -a && source ../.env && set +a &&
 # HOST=<IP público> com ssh_break_glass = true no terraform.tfvars.
 HOST    ?= mgdn-primary
 SSH      = ssh -o StrictHostKeyChecking=accept-new ubuntu@$(HOST)
-COMPOSE := sudo docker compose -f /opt/mgdn-platform/deploy/$$(. /etc/mgdn-platform/env && echo $$ROLE)/compose.yaml
+# O papel vem do hostname (mgdn-primary -> primary): o /etc/mgdn-platform/env é 0600.
+COMPOSE := sudo docker compose -f /opt/mgdn-platform/deploy/$$(hostname | sed s/^mgdn-//)/compose.yaml
 HS      := sudo docker exec $$(sudo docker ps -q --filter label=com.docker.compose.service=headscale) headscale
 
 .PHONY: help
