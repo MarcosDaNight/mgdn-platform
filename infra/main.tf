@@ -43,6 +43,9 @@ module "primary" {
     https = { protocol = "tcp", port = 443, description = "Headscale (autenticado)" }
   })
 
+  # Backup e restore do Headscale (ADR 0006).
+  extra_packages = ["age", "sqlite3"]
+
   # O próprio host fala com o Headscale local sem depender de hairpin NAT.
   etc_hosts = { (var.headscale_hostname) = "127.0.0.1" }
 }

@@ -59,3 +59,9 @@ variable "repo_branch" {
   description = "Branch acompanhada pelo GitOps."
   type        = string
 }
+
+variable "extra_packages" {
+  description = "Pacotes apt adicionais só deste host. Mudar a lista altera o cloud-init e recria a VM."
+  type        = list(string)
+  default     = []
+}
