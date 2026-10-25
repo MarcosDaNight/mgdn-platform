@@ -33,6 +33,7 @@ customDNS:
   filterUnmappedTypes: true
   mapping:
     vault.mgdn.com.br: 100.64.0.1
+    actual.mgdn.com.br: 100.64.0.1
 
 blocking:
   denylists:

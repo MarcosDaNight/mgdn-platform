@@ -14,6 +14,13 @@ http:
       middlewares: [tailnet-only, security-headers]
       tls:
         certResolver: cloudflare
+    actual:
+      rule: Host(`actual.mgdn.com.br`)
+      entryPoints: [websecure]
+      service: actual
+      middlewares: [tailnet-only, security-headers]
+      tls:
+        certResolver: cloudflare
 
   middlewares:
     tailnet-only:
@@ -38,3 +45,7 @@ http:
       loadBalancer:
         servers:
           - url: http://vaultwarden:80
+    actual:
+      loadBalancer:
+        servers:
+          - url: http://actual:5006

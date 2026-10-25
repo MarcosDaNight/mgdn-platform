@@ -216,7 +216,7 @@ apply() {
   # VM nova (primeiro deploy): restaura o Headscale do backup mais recente antes de
   # subi-lo, para os aparelhos seguirem na tailnet sem novo registro (ADR 0006).
   if [[ -z "$from" ]] && has_service headscale && [[ -n "${BACKUP_BUCKET:-}" ]]; then
-    compose create headscale vaultwarden traefik >/dev/null
+    compose create headscale vaultwarden actual traefik >/dev/null
     "$REPO_DIR/scripts/restore.sh" --if-empty --with-tailscale >/dev/null || log "AVISO: restore do Headscale falhou; subindo com estado vazio"
   fi
 
