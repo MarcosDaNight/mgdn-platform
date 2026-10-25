@@ -108,6 +108,7 @@ jobs:
             echo "rto=$((t1 - t0))"
             echo "rpo_h=$(( (t1 - backup_epoch) / 3600 ))"
             echo "nodes=$nodes"
+            # O GitHub tira a quebra de linha final da saída; o corpo da issue a repõe.
             printf 'apps<<EOF\n%sEOF\n' "$apps"
             echo "certs=$certs"
             echo "backups=$count (mais antigo: ${oldest_d} dias)"
@@ -132,8 +133,8 @@ jobs:
           else
             title="DR drill $month: FALHOU"
           fi
-          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale e apps respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n%s| Certificados do Traefik | %s |\n| Backups no bucket | %s |\n| Execução | %s |\n' \
-            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" "${APPS:-$'| apps | — |\n'}" "${CERTS:-—}" "${BACKUPS:-—}" \
+          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale e apps respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n%s\n| Certificados do Traefik | %s |\n| Backups no bucket | %s |\n| Execução | %s |\n' \
+            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" "${APPS:-| apps | — |}" "${CERTS:-—}" "${BACKUPS:-—}" \
             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
           echo "$body" >>"$GITHUB_STEP_SUMMARY"
           gh label create dr-drill --color 5319E7 --description "Restore drill mensal" --force >/dev/null
