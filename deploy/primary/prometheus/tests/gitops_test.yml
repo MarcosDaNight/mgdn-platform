@@ -1,0 +1,71 @@
+# Testes das regras do GitOps: `promtool test rules`.
+rule_files:
+  - ../rules/gitops.yml
+
+evaluation_interval: 30s
+
+tests:
+  # Saudável: rodando a cada 2 min, sucesso, em dia.
+  - interval: 2m
+    input_series:
+      - series: 'mgdn_gitops_last_result{host="secondary"}'
+        values: "1x30"
+      - series: 'mgdn_gitops_behind{host="secondary"}'
+        values: "0x30"
+      - series: 'mgdn_gitops_last_run_timestamp_seconds{host="secondary"}'
+        values: "0+120x30"
+      - series: 'mgdn_gitops_drift_corrections_total{host="secondary"}'
+        values: "0x30"
+    alert_rule_test:
+      - eval_time: 55m
+        alertname: GitOpsFailing
+        exp_alerts: []
+      - eval_time: 55m
+        alertname: GitOpsStale
+        exp_alerts: []
+
+  # Começa a falhar aos 20 min e fica para trás: Failing aos 30 min, Behind aos 50.
+  - interval: 2m
+    input_series:
+      - series: 'mgdn_gitops_last_result{host="primary"}'
+        values: "1x10 0x30"
+      - series: 'mgdn_gitops_behind{host="primary"}'
+        values: "0x10 1x30"
+    alert_rule_test:
+      - eval_time: 26m
+        alertname: GitOpsFailing
+        exp_alerts: []
+      - eval_time: 32m
+        alertname: GitOpsFailing
+        exp_alerts:
+          - exp_labels: {severity: warning, host: primary}
+            exp_annotations:
+              summary: "GitOps falhando em primary há 10 min"
+              description: "As últimas execuções do sync terminaram com erro (fetch, validação ou deploy)."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/gitops.md
+      - eval_time: 52m
+        alertname: GitOpsBehind
+        exp_alerts:
+          - exp_labels: {severity: warning, host: primary}
+            exp_annotations:
+              summary: "primary não aplicou o último commit da main há 30 min"
+              description: "Provavelmente a validação recusou o commit ou houve rollback."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/gitops.md
+
+  # Timer parado: o arquivo de métricas fica com o último horário (600 s).
+  - interval: 1m
+    input_series:
+      - series: 'mgdn_gitops_last_run_timestamp_seconds{host="primary"}'
+        values: "600x40"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: GitOpsStale
+        exp_alerts: []
+      - eval_time: 32m
+        alertname: GitOpsStale
+        exp_alerts:
+          - exp_labels: {severity: warning, host: primary}
+            exp_annotations:
+              summary: "GitOps não roda em primary há mais de 15 min"
+              description: "O timer parou (ex.: esquecido depois de um make headscale-drain) ou o script trava."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/gitops.md
