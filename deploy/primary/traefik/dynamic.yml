@@ -7,13 +7,6 @@ http:
       service: headscale
       tls:
         certResolver: cloudflare
-    # Transição: aparelhos registrados com o DuckDNS seguem funcionando.
-    headscale-legacy:
-      rule: Host(`mgdn-platform.duckdns.org`)
-      entryPoints: [websecure]
-      service: headscale
-      tls:
-        certResolver: alpn
     vault:
       rule: Host(`vault.mgdn.com.br`)
       entryPoints: [websecure]

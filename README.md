@@ -233,4 +233,5 @@ Cada fase entrega algo utilizável e tem um critério de aceite verificável.
   - [x] Domínio `mgdn.com.br` com DNS como código; Traefik como borda HTTPS; Headscale atrás dele.
   - [x] **Vaultwarden** em `https://vault.mgdn.com.br`: só pela tailnet (403 de fora), backup
     horário, restore automático e drill mensal.
-  - [ ] Migrar os aparelhos para `headscale.mgdn.com.br` e aposentar o DuckDNS.
+  - [x] Aparelhos migrados para `headscale.mgdn.com.br` (`tailscale up --force-reauth`: mesmos
+    nós e IPs, só a chave do nó renovada) e DuckDNS aposentado.
