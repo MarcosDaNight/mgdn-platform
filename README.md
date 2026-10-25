@@ -406,6 +406,19 @@ backup.
   da dependência de um tópico secreto no ntfy.sh público.
 - [ ] **Tema do Actual Budget com a identidade da plataforma**, depois da 26.11.0: CSS com
   `#13284B` e `#1C9E8C` (claro) e `#E6EDF3` e `#2BC4AC` (escuro).
+- [ ] **Actual Budget para uma segunda pessoa**, com finanças separadas. É preciso decidir
+  duas coisas:
+  - **Isolamento no Actual:**
+    - *Segunda instância* (`actual-2`, com subdomínio, senha e volume próprios): ~40 MB de
+      RAM e isolamento total, no mesmo padrão do guia de novo app. **Recomendada para começar.**
+    - *Modo multiusuário* do Actual: um servidor só, com permissão por orçamento. Exige um
+      provedor OpenID, por exemplo o Pocket ID, que é leve e usa passkeys. Compensa se mais
+      pessoas ou apps forem usar login único.
+    - Uma instância compartilhada com a mesma senha não serve: cada um veria e poderia
+      apagar os orçamentos do outro.
+  - **Acesso pela tailnet:** os aparelhos dela entram num usuário próprio do Headscale, com
+    uma política (ACL) que libera só o DNS do Blocky e a porta 443 do Traefik. Hoje, sem
+    política, todos os nós se alcançam.
 - [ ] **Talvez: importador de OFX para o Actual Budget**, num repositório separado. Só se a
   importação manual incomodar depois de um mês de uso
   ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)).
