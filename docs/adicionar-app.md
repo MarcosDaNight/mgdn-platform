@@ -1,182 +1,108 @@
 # Como adicionar um app
 
 Este guia mostra como colocar um app novo na VM principal, acessível **só pela tailnet**,
-com HTTPS e backup. Ele segue o mesmo padrão do Vaultwarden
-([ADR 0010](adr/0010-dominio-proprio-traefik-e-vaultwarden.md)). O exemplo usa o
-[Actual Budget](https://github.com/actualbudget/actual), que foi implantado exatamente assim
-([ADR 0012](adr/0012-actual-budget-e-dados-bancarios.md)). O código real está nos arquivos
-citados em cada passo. Troque nome, imagem, porta e diretório de dados pelos do seu app.
+com HTTPS, healthcheck e backup. O caminho é o mesmo do Vaultwarden e do
+[Actual Budget](https://github.com/actualbudget/actual)
+([ADR 0012](adr/0012-actual-budget-e-dados-bancarios.md)), e quase tudo sai de um comando
+só: `make new-app`. O que o app precisa declarar está no
+[contrato de app](adr/0015-contrato-de-app-por-labels.md).
 
 ```mermaid
 flowchart LR
-  dev["aparelho na tailnet"] -- "consulta actual.mgdn.com.br" --> blocky["Blocky<br/>customDNS"]
+  dev["aparelho na tailnet"] -- "consulta app.mgdn.com.br" --> blocky["Blocky<br/>customDNS"]
   blocky -- "100.64.0.1" --> dev
   dev -- "HTTPS pela tailnet" --> traefik["Traefik<br/>tailnet-only"]
-  traefik --> app["actual:5006"]
-  app -. "backup horário" .-> bkp[("bucket imutável")]
+  traefik --> app["app:porta"]
+  app -. "backup horário (label)" .-> bkp[("bucket imutável")]
 ```
 
 ## 0. Antes de começar
 
 | Pergunta | Por quê |
 |---|---|
-| **Cabe na RAM?** | A principal tem 2 GB, com ~1 GB disponível. Some os `mem_limit` de `deploy/primary/compose.yaml` e confira com `make status`. Apps que pedem Postgres, Redis ou workers de ML (Immich, Paperless) geralmente não cabem. |
-| **Guarda dados?** | Se guarda, precisa de backup e restore (passo 5). Prefira apps com SQLite: o backup online do SQLite é consistente sem parar o app. |
-| **Precisa de segredo?** | Segredo novo exige uma variável no Terraform, e mudar o cloud-init **recria a VM principal** (passo 2). Prefira apps que guardam a própria configuração no volume. |
+| **Cabe na RAM?** | A principal tem 2 GB. O `make new-app` avisa quando a soma dos `mem_limit` passa do que ela comporta; confira o uso real com `make status`. Apps que pedem Postgres, Redis ou workers de ML (Immich, Paperless) geralmente não cabem. |
+| **Guarda dados?** | Se guarda, passe `DATA=` e o volume entra no backup sozinho. Prefira apps com SQLite: o backup faz um snapshot consistente de cada banco sem parar o app. |
+| **Precisa de segredo?** | Vai cifrado no repositório, sem Terraform e sem recriar a VM ([ADR 0014](adr/0014-segredos-cifrados-no-repositorio.md)). |
 | **Muda uma decisão?** | Um app comum não precisa de ADR. Um app que exige uma porta pública nova ou outra VM precisa. |
 
-## 1. Serviço no Compose
+## 1. Gerar
 
-Em `deploy/primary/compose.yaml`, adicione o serviço e o volume:
-
-```yaml
-services:
-  actual:
-    image: actualbudget/actual-server:<versão>@sha256:<digest>
-    restart: unless-stopped
-    volumes:
-      - actual-data:/data
-    mem_limit: 256m
-
-volumes:
-  actual-data:
+```bash
+make new-app NAME=actual IMAGE=actualbudget/actual-server:26.10.0-alpine PORT=5006 \
+  DATA=/data HEALTH=/health READY=server-files/account.sqlite
 ```
 
-- **Sem `ports:`.** O Traefik alcança o app pela rede do Compose. Publicar uma porta
-  expõe o app na interface pública (o security group ainda filtra, mas é uma camada a menos).
-- **Tag e digest juntos.** A tag diz a versão para quem lê; o digest garante que é a mesma
-  imagem. Para obter o digest:
+| Parâmetro | O que é |
+|---|---|
+| `NAME` | nome do serviço e do subdomínio (`<NAME>.mgdn.com.br`) |
+| `IMAGE` | imagem com tag. O digest é resolvido no registro e fixado (`tag@sha256:...`): a tag diz a versão para quem lê, e o digest garante que é a mesma imagem. |
+| `PORT` | porta HTTP do container |
+| `DATA` | diretório de dados no container; vira um volume com backup |
+| `HEALTH` | caminho que responde 2xx com o app saudável (padrão: `/`) |
+| `READY` | arquivo do volume que só existe quando há dados de verdade (padrão: qualquer conteúdo). Evita restaurar por cima de dados e fazer backup de um volume recém-criado. |
+| `MEM` | `mem_limit` (padrão: `256m`). Comece com folga, observe `docker stats` por uns dias e ajuste. |
 
-  ```bash
-  docker buildx imagetools inspect actualbudget/actual-server:<versão> | grep -m1 Digest
-  ```
+O comando edita três arquivos:
 
-- **`mem_limit` medido, não chutado.** Comece com folga, observe `docker stats` por uns
-  dias e ajuste.
-- **De graça:** o `supply-chain` passa a escanear a imagem com o Trivy, e o Dependabot
-  passa a propor as atualizações. Os dois leem a lista de imagens do próprio Compose.
+- **`deploy/primary/compose.yaml`:** o serviço, sem `ports:` (o Traefik o alcança pela rede
+  do Compose), com `mem_limit` e os labels `mgdn.*`, mais o volume.
+- **`deploy/primary/traefik/dynamic.yml`:** o router, com os middlewares `tailnet-only` e
+  `security-headers`, e o service. O certificado sai por DNS-01, então o nome **não precisa
+  existir no DNS público**.
+- **`deploy/common/blocky/config.yml`:** o nome no `customDNS`, apontando para `100.64.0.1`.
+  O nome só existe para quem usa o Blocky como DNS, ou seja, para os aparelhos da tailnet.
+  **Não crie o registro na Cloudflare.**
 
-## 2. Segredos (só se o app precisar)
+## 2. Ajustar
 
-Pule este passo se o app guarda a configuração no volume, como o Actual Budget e o
-Vaultwarden. Se o app precisa de um segredo vindo de fora:
+Revise o diff. O que o gerador não sabe:
 
-1. Crie a variável em `infra/variables.tf` (`sensitive = true`) e coloque o valor no
-   `terraform.tfvars`, que fica fora do Git.
-2. Passe a variável no mapa `env` do `module "primary"`, em `infra/main.tf`. Ela chega à VM
-   em `/etc/mgdn-platform/env`.
-3. Em `scripts/gitops-sync.sh`, dentro de `apply()`, grave o segredo num arquivo com
-   permissão restrita em `/etc/mgdn-platform/<app>/`, como já é feito para o Traefik e o
-   Alertmanager. Monte esse diretório no container como `:ro`.
-4. **Mudar o cloud-init recria a VM principal.** O `terraform-plan` do PR vai mostrar o
-   aviso ⚠️. Antes do `make apply`, rode `make headscale-drain`.
+- **Variáveis de ambiente do app:** acrescente `environment:` no serviço.
+- **Segredo:** `make secrets-set ROLE=primary KEY=<APP>_TOKEN` grava o valor cifrado em
+  `secrets/primary.env.age`, e ele chega à VM em `/etc/mgdn-platform/secrets.env`. Para
+  entregá-lo ao container, grave-o num arquivo dentro de `apply()` em
+  `scripts/gitops-sync.sh`, como já é feito para o Traefik e o Alertmanager, e monte o
+  diretório como `:ro`.
+- **Resumo no DR drill (opcional):** o label `mgdn.summary` roda uma consulta no SQLite
+  restaurado e mostra o resultado na issue do drill, como faz o Vaultwarden:
+  `mgdn.summary: "db.sqlite3: select count(*) || ' item(ns)' from ciphers"`.
+- **Arquivos fora do backup (opcional):** `mgdn.backup.exclude: cache,tmp`.
 
-## 3. Rota no Traefik
+## 3. O que vem de graça, pelos labels
 
-Em `deploy/primary/traefik/dynamic.yml`, adicione o router e o service:
+Nenhum script precisa saber o nome do app:
 
-```yaml
-http:
-  routers:
-    actual:
-      rule: Host(`actual.mgdn.com.br`)
-      entryPoints: [websecure]
-      service: actual
-      middlewares: [tailnet-only, security-headers]
-      tls:
-        certResolver: cloudflare
+| Onde | O que acontece |
+|---|---|
+| `backup.sh` | o volume entra no backup horário, com snapshot consistente de cada SQLite |
+| `restore.sh` | numa VM nova, o volume é restaurado antes de o app subir |
+| `healthcheck.sh` | o app é conferido pelo Traefik a cada 5 min, e uma falha avisa pelo healthchecks.io |
+| `dr-drill` | todo mês, o app sobe com os dados restaurados num runner descartável e precisa responder no `HEALTH` |
+| `supply-chain` e Dependabot | o Trivy escaneia a imagem e o Dependabot propõe as atualizações |
+| CI | confere que o app tem rota e nome (`apps.py check`) e valida o Compose e o Blocky |
 
-  services:
-    actual:
-      loadBalancer:
-        servers:
-          - url: http://actual:5006
-```
+## 4. PR, deploy e verificação
 
-- **O `tailnet-only` é obrigatório.** Sem ele, quem souber o nome e o IP público acessa o
-  app pela porta 443.
-- O certificado sai por DNS-01, então o nome **não precisa existir no DNS público**.
-- Quando o arquivo muda, o `gitops-sync` reinicia o Traefik. O arquivo entra no container
-  por bind mount, e o `git checkout` troca o inode, então o watch sozinho não basta.
-
-## 4. Nome na tailnet (split-horizon)
-
-Em `deploy/common/blocky/config.yml`, adicione o nome ao `customDNS`:
-
-```yaml
-customDNS:
-  mapping:
-    vault.mgdn.com.br: 100.64.0.1
-    actual.mgdn.com.br: 100.64.0.1
-```
-
-- **Não crie o registro na Cloudflare.** O nome só existe para quem usa o Blocky como DNS,
-  ou seja, para os aparelhos da tailnet. Fora dela, o nome nem resolve.
-- A configuração é comum aos dois papéis, então a secundária (`100.64.0.4`) também
-  responde o nome.
-
-## 5. Backup e restore (se o app guarda dados)
-
-Use o Vaultwarden como modelo; cada script já tem o bloco dele.
-
-1. **`scripts/backup.sh`:** copie o volume para `$work/<app>/` e acrescente `<app>` a
-   `dirs`. Use `sqlite3 <db> ".backup '<destino>'"` nos bancos SQLite e confira o
-   `PRAGMA integrity_check`. Copie os demais arquivos com `cp`.
-2. **`scripts/restore.sh`:**
-   - acrescente a opção `--<app>-target` e uma variável `need_<app>`, que respeita
-     `--if-empty`;
-   - acrescente o bloco que copia `$work/<app>/` para o volume.
-
-   Backups antigos não têm o diretório do app, então o bloco precisa tolerar a ausência.
-3. **`scripts/gitops-sync.sh`:** no primeiro deploy de uma VM nova,
-   `compose create headscale vaultwarden traefik` cria os volumes antes do restore.
-   Acrescente o serviço nessa lista, ou o restore não acha o volume de destino.
-4. **`.github/workflows/dr-drill.yml`:** suba o app com os dados restaurados e confira que
-   ele responde, como o drill faz com o Vaultwarden. Acrescente o resultado à tabela da issue.
-
-Antes do merge, teste o caminho completo na VM:
-`sudo systemctl start mgdn-backup.service` e depois
-`sudo /opt/mgdn-platform/scripts/restore.sh --<app>-target /tmp/teste-restore`, conferindo
-o conteúdo.
-
-## 6. Monitoramento (opcional)
-
-- Se o app expõe métricas Prometheus, adicione um job em
-  `deploy/primary/prometheus/prometheus.yml`:
-
-  ```yaml
-  - job_name: actual
-    static_configs:
-      - targets: ["actual:5006"]
-  ```
-
-  O alerta `MonitoringTargetDown` (`up == 0`) passa a cobrir o app automaticamente.
-- Se o app tiver um SLO próprio, crie as regras em `rules/`, os testes em `tests/` e um
-  runbook em `docs/runbooks/`. O `deploy-config` roda os testes no CI.
-
-## 7. PR, deploy e verificação
-
-1. Abra o PR. Os checks validam o Compose, a configuração do Blocky e as regras, e o
-   Trivy escaneia a imagem nova.
-2. Depois do merge, as VMs aplicam em até ~2 min. Acompanhe com `make sync` ou
-   `make status`.
-3. Verifique:
+1. Abra o PR. Com o CI verde e o merge, a principal aplica em até ~2 min. Acompanhe com
+   `make sync` ou `make status`.
+2. Verifique:
 
    ```bash
    # de um aparelho na tailnet: resolve para 100.64.0.1 e abre
-   dig +short actual.mgdn.com.br
-   curl -sI https://actual.mgdn.com.br | head -1
+   dig +short <app>.mgdn.com.br
+   curl -sI https://<app>.mgdn.com.br | head -1
 
    # de fora da tailnet, forçando o IP público: tem de dar 403
-   curl -sI --resolve actual.mgdn.com.br:443:<IP público da principal> https://actual.mgdn.com.br | head -1
+   curl -sI --resolve <app>.mgdn.com.br:443:<IP público da principal> https://<app>.mgdn.com.br | head -1
    ```
 
-4. Se o app guarda dados, rode `make backup` e confira que o tamanho do backup cresceu
-   (`make backups`).
+3. Se o app guarda dados, rode `make backup` depois de usá-lo e confira na saída que o
+   tamanho do backup cresceu (`make backups`).
 
-## 8. Documentação
+## 5. Documentação
 
-- No README, acrescente o app à tabela de componentes e, se tiver dados, à lista do que é
-  salvo em *Backup e DR*.
-- Atualize o comentário do topo de `deploy/primary/compose.yaml`, se mudar o que é exposto.
+- No README, acrescente o app à tabela de componentes.
 - Se o app saiu de *Próximos passos*, tire-o de lá.
+- Se o app expõe métricas Prometheus, acrescente um job em
+  `deploy/primary/prometheus/prometheus.yml`. O alerta `MonitoringTargetDown` passa a
+  cobri-lo.

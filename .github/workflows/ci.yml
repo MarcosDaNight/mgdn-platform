@@ -63,6 +63,21 @@ jobs:
       - name: blackbox config check
         if: hashFiles(format('deploy/{0}/blackbox/blackbox.yml', matrix.role)) != ''
         run: docker compose run --rm --no-deps -T blackbox --config.file=/etc/blackbox/blackbox.yml --config.check
+      # Contrato de app (ADR 0015): cada mgdn.url tem rota no Traefik e nome no Blocky.
+      - name: contrato dos apps
+        if: matrix.role == 'primary'
+        run: python3 ../../scripts/apps.py --compose compose.yaml check
+      # O gerador do `make new-app` produz um app que passa nas mesmas validações.
+      - name: make new-app (numa cópia)
+        if: matrix.role == 'primary'
+        run: |
+          t=$(mktemp -d)
+          cp -r ../../deploy "$t/"
+          python3 ../../scripts/new-app.py exemplo nginx:1.27-alpine@sha256:$(printf '0%.0s' {1..64}) 8080 --data /data --root "$t"
+          docker compose -f "$t/deploy/primary/compose.yaml" config --quiet
+          python3 ../../scripts/apps.py --compose "$t/deploy/primary/compose.yaml" check
+          python3 ../../scripts/apps.py --compose "$t/deploy/primary/compose.yaml" backup | grep -q '^exemplo'
+          docker compose -f "$t/deploy/primary/compose.yaml" run --rm --no-deps -T blocky validate
       - name: headscale configtest
         if: hashFiles(format('deploy/{0}/headscale/config.yaml', matrix.role)) != ''
         run: |

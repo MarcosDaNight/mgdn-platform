@@ -71,22 +71,37 @@ fi
 disk=$(df --output=pcent / | tail -1 | tr -dc '0-9')
 
 # Papel primary: Headscale com HTTPS válido (o /etc/hosts aponta o hostname para
-# 127.0.0.1) e o Blocky respondendo no IP da tailnet. "skip" até o host entrar na tailnet.
-headscale="skip" tailnet_dns="skip" vault="skip" actual="skip"
+# 127.0.0.1), o Blocky respondendo no IP da tailnet e cada app com o label mgdn.url
+# (ADR 0015) saudável pelo Traefik. "skip" até o host entrar na tailnet.
+headscale="skip" tailnet_dns="skip" apps="skip" apps_ok=true
 if [[ "${ROLE:-}" == "primary" ]]; then
   tailnet_metrics || echo "[healthcheck] AVISO: métricas da tailnet não foram atualizadas"
   curl -fsS -m 10 -o /dev/null "https://${HEADSCALE_HOSTNAME}/health" && headscale=ok || headscale=fail
   ts_ip=$(tailscale ip -4 2>/dev/null || true)
   if [[ -n "$ts_ip" ]]; then
     dig +short +time=3 +tries=2 "@$ts_ip" cloudflare.com A | grep -qE '^[0-9.]+$' && tailnet_dns=ok || tailnet_dns=fail
-    # Vaultwarden pelo Traefik, com origem na tailnet (o allowlist do Traefik exige).
-    curl -fsS -m 10 -o /dev/null --resolve "vault.mgdn.com.br:443:$ts_ip" https://vault.mgdn.com.br/alive && vault=ok || vault=fail
-    curl -fsS -m 10 -o /dev/null --resolve "actual.mgdn.com.br:443:$ts_ip" https://actual.mgdn.com.br/health && actual=ok || actual=fail
+    # Pelo Traefik, com origem na tailnet (o allowlist do Traefik exige).
+    apps=""
+    while IFS=$'\t' read -r svc url health; do
+      host=${url#https://}
+      if curl -fsS -m 10 -o /dev/null --resolve "$host:443:$ts_ip" "$url$health"; then
+        apps+="$svc:ok,"
+      else
+        apps+="$svc:fail,"
+        apps_ok=false
+      fi
+    done < <(python3 /opt/mgdn-platform/scripts/apps.py http)
+    apps=${apps%,}
+    # Sem nenhum app listado, o apps.py falhou (ex.: docker compose config).
+    [[ -n "$apps" ]] || {
+      apps="erro"
+      apps_ok=false
+    }
   fi
 fi
 
 if [[ "$resolve" =~ ^[0-9.]+$ && "$block" == "0.0.0.0" && "$home" != "0" &&
-  "$headscale" != "fail" && "$tailnet_dns" != "fail" && "$vault" != "fail" && "$actual" != "fail" ]] && ((disk < disk_max_pct)); then
+  "$headscale" != "fail" && "$tailnet_dns" != "fail" ]] && $apps_ok && ((disk < disk_max_pct)); then
   status=ok
   suffix=""
 else
@@ -94,7 +109,7 @@ else
   suffix="/fail"
 fi
 
-echo "[healthcheck] $status resolve=${resolve:-none} block=${block:-none} home_queries_${idle_window_min}m=${home} disk=${disk}% headscale=${headscale} tailnet_dns=${tailnet_dns} vault=${vault} actual=${actual}"
+echo "[healthcheck] $status resolve=${resolve:-none} block=${block:-none} home_queries_${idle_window_min}m=${home} disk=${disk}% headscale=${headscale} tailnet_dns=${tailnet_dns} apps=${apps:-none}"
 ((disk >= disk_max_pct)) && echo "[healthcheck] disco em ${disk}% — veja 'docker system df' e 'du -xh / | sort -h | tail'"
 [[ "$home" == "0" ]] && echo "[healthcheck] nenhuma consulta da rede de casa em ${idle_window_min} min — DDNS do roteador desatualizado? veja 'make allowlist'"
 

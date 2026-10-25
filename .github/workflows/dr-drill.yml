@@ -1,8 +1,9 @@
 name: dr-drill
 
 # Restore drill mensal (ADR 0006): restaura o backup mais recente num runner
-# descartável, sobe o Headscale, o Vaultwarden e o Actual Budget com ele, confere os nós e publica RTO/RPO
-# medidos. Backup que nunca foi restaurado não prova nada.
+# descartável, sobe o Headscale e cada app com dados (labels mgdn.*, ADR 0015) com
+# ele, confere os nós e publica RTO/RPO medidos. Backup que nunca foi restaurado não
+# prova nada.
 #
 # Secrets: BACKUP_RO_ACCESS_KEY / BACKUP_RO_SECRET_KEY (chave mgdn-backup-ro, só
 # leitura) e BACKUP_AGE_IDENTITY (linha AGE-SECRET-KEY-... da chave privada).
@@ -38,11 +39,14 @@ jobs:
         run: |
           set -euo pipefail
           t0=$(date +%s)
+          # Cada serviço com mgdn.backup.volume restaura num diretório próprio.
+          args=()
+          for svc in $(python3 scripts/apps.py backup | cut -f1); do
+            args+=(--target "$svc=$RUNNER_TEMP/$svc")
+          done
+          restored=$(scripts/restore.sh "${args[@]}" | sed -n 's/^restored=//p')
           data="$RUNNER_TEMP/headscale"
-          vwdata="$RUNNER_TEMP/vaultwarden"
           acmedata="$RUNNER_TEMP/traefik"
-          abdata="$RUNNER_TEMP/actual"
-          restored=$(scripts/restore.sh --target "$data" --vw-target "$vwdata" --actual-target "$abdata" --acme-target "$acmedata" | sed -n 's/^restored=//p')
           certs=0
           [[ ! -s "$acmedata/acme.json" ]] || certs=$(jq '[.[].Certificates // [] | length] | add' "$acmedata/acme.json")
 
@@ -60,25 +64,29 @@ jobs:
 
           nodes=$(docker exec hs headscale nodes list -o json | jq -r '.[].given_name' | sort | xargs)
 
-          # Vaultwarden (ADR 0010): sobe o app com o backup e confere que responde.
-          vw="ausente no backup"
-          if [[ -f "$vwdata/db.sqlite3" ]]; then
-            vwimage=$(docker compose -f deploy/primary/compose.yaml config --format json | jq -r '.services.vaultwarden.image')
-            docker run -d --name vw -p 127.0.0.1:8081:80 -e DOMAIN=http://127.0.0.1:8081 -v "$vwdata:/data" "$vwimage" >/dev/null
-            for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8081/alive && break; sleep 2; done
-            curl -fsS -o /dev/null http://127.0.0.1:8081/alive
-            vw="ok ($(sqlite3 "$vwdata/db.sqlite3" 'select count(*) from users;') usuário(s), $(sqlite3 "$vwdata/db.sqlite3" 'select count(*) from ciphers;') item(ns))"
-          fi
-
-          # Actual Budget (ADR 0012): mesma ideia, com a contagem de orçamentos.
-          ab="ausente no backup"
-          if [[ -f "$abdata/server-files/account.sqlite" ]]; then
-            abimage=$(docker compose -f deploy/primary/compose.yaml config --format json | jq -r '.services.actual.image')
-            docker run -d --name ab -p 127.0.0.1:5006:5006 -v "$abdata:/data" "$abimage" >/dev/null
-            for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:5006/health && break; sleep 2; done
-            curl -fsS -o /dev/null http://127.0.0.1:5006/health
-            ab="ok ($(sqlite3 "$abdata/server-files/account.sqlite" 'select count(*) from files;') orçamento(s))"
-          fi
+          # Apps (ADR 0015): sobe cada um com os dados restaurados, na porta do label
+          # mgdn.port, espera o mgdn.health e roda o resumo do mgdn.summary.
+          apps=""
+          while read -r app; do
+            svc=$(jq -r .service <<<"$app")
+            dir="$RUNNER_TEMP/$svc"
+            ready=$(jq -r .ready <<<"$app")
+            if [[ ! -e "$dir/${ready:-.}" || -z "$(ls -A "$dir" 2>/dev/null)" ]]; then
+              apps+="| $svc | ausente no backup |"$'\n'
+              continue
+            fi
+            env=()
+            while IFS= read -r kv; do env+=(-e "$kv"); done < <(jq -r '.environment | to_entries[] | "\(.key)=\(.value)"' <<<"$app")
+            docker run -d --name "drill-$svc" -p "127.0.0.1::$(jq -r .port <<<"$app")" "${env[@]}" \
+              -v "$dir:$(jq -r .mount <<<"$app")" "$(jq -r .image <<<"$app")" >/dev/null
+            url="http://$(docker port "drill-$svc" "$(jq -r .port <<<"$app")" | head -1)$(jq -r .health <<<"$app")"
+            for _ in $(seq 1 30); do curl -fsS -o /dev/null "$url" && break; sleep 2; done
+            curl -fsS -o /dev/null "$url" || { docker logs "drill-$svc" | tail -20; echo "::error::$svc não respondeu em $url"; exit 1; }
+            summary=$(jq -r .summary <<<"$app")
+            detail=""
+            [[ -z "$summary" ]] || detail=" ($(sqlite3 "$dir/${summary%%: *}" "${summary#*: }"))"
+            apps+="| $svc | ok$detail |"$'\n'
+          done < <(python3 scripts/apps.py drill)
           t1=$(date +%s)
           for n in $EXPECTED_NODES; do
             grep -qw "$n" <<<"$nodes" || { echo "::error::nó $n ausente no backup restaurado"; exit 1; }
@@ -100,8 +108,8 @@ jobs:
             echo "rto=$((t1 - t0))"
             echo "rpo_h=$(( (t1 - backup_epoch) / 3600 ))"
             echo "nodes=$nodes"
-            echo "vaultwarden=$vw"
-            echo "actual=$ab"
+            # O GitHub tira a quebra de linha final da saída; o corpo da issue a repõe.
+            printf 'apps<<EOF\n%sEOF\n' "$apps"
             echo "certs=$certs"
             echo "backups=$count (mais antigo: ${oldest_d} dias)"
           } >>"$GITHUB_OUTPUT"
@@ -116,8 +124,7 @@ jobs:
           RPO: ${{ steps.drill.outputs.rpo_h }}
           NODES: ${{ steps.drill.outputs.nodes }}
           BACKUPS: ${{ steps.drill.outputs.backups }}
-          VAULTWARDEN: ${{ steps.drill.outputs.vaultwarden }}
-          ACTUAL: ${{ steps.drill.outputs.actual }}
+          APPS: ${{ steps.drill.outputs.apps }}
           CERTS: ${{ steps.drill.outputs.certs }}
         run: |
           month=$(TZ=America/Sao_Paulo date +%Y-%m)
@@ -126,8 +133,8 @@ jobs:
           else
             title="DR drill $month: FALHOU"
           fi
-          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale, Vaultwarden e Actual respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n| Vaultwarden | %s |\n| Actual Budget | %s |\n| Certificados do Traefik | %s |\n| Backups no bucket | %s |\n| Execução | %s |\n' \
-            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" "${VAULTWARDEN:-—}" "${ACTUAL:-—}" "${CERTS:-—}" "${BACKUPS:-—}" \
+          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale e apps respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n%s\n| Certificados do Traefik | %s |\n| Backups no bucket | %s |\n| Execução | %s |\n' \
+            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" "${APPS:-| apps | — |}" "${CERTS:-—}" "${BACKUPS:-—}" \
             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
           echo "$body" >>"$GITHUB_STEP_SUMMARY"
           gh label create dr-drill --color 5319E7 --description "Restore drill mensal" --force >/dev/null

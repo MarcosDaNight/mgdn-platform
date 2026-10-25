@@ -232,12 +232,15 @@ canais) e o teste de aceite estão no [runbook](docs/runbooks/watchdog.md).
 | `make backup` / `make backups` | backup agora / lista os backups no bucket |
 | `make plan` / `make apply` | Terraform local (credenciais em `.env`) |
 | `make lint` / `make test-infra` | pre-commit e `terraform test` |
+| `make new-app NAME=… IMAGE=… PORT=…` | gera um app só da tailnet (Compose, Traefik, Blocky e labels de backup) |
 
 ### Adicionar um app
 
-O passo a passo está em [`docs/adicionar-app.md`](docs/adicionar-app.md). Ele cobre o
-Compose, a rota no Traefik com `tailnet-only`, o nome na tailnet pelo Blocky, o backup e
-restore, o monitoramento e a verificação.
+`make new-app` gera o serviço no Compose, a rota no Traefik com `tailnet-only` e o nome na
+tailnet pelo Blocky. Os labels `mgdn.*` do serviço
+([ADR 0015](docs/adr/0015-contrato-de-app-por-labels.md)) colocam o app no backup, no
+restore de VM nova, no healthcheck e no DR drill, sem mexer em nenhum script. O passo a passo
+está em [`docs/adicionar-app.md`](docs/adicionar-app.md).
 
 ### Mudar a configuração do Blocky
 
@@ -274,10 +277,10 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
 ### Backup e DR ([ADR 0006](docs/adr/0006-backup-imutavel-e-restore-drill.md))
 
 - **O que é salvo, de hora em hora:**
-  - banco e chave Noise do Headscale;
-  - o cofre do Vaultwarden;
-  - os orçamentos e a conta do Actual Budget;
-  - os certificados do Traefik;
+  - o volume de todo serviço com o label `mgdn.backup.volume`
+    ([ADR 0015](docs/adr/0015-contrato-de-app-por-labels.md)), com snapshot consistente de cada
+    SQLite: hoje, o Headscale (banco e chave Noise), o cofre do Vaultwarden, os orçamentos e a
+    conta do Actual Budget e os certificados do Traefik;
   - o estado do Tailscale da VM principal.
 - **Recriar a VM principal:** **antes do `make apply`, rode `make headscale-drain`.**
   - O drain faz um backup novo e para o Headscale de forma limpa.
@@ -334,6 +337,7 @@ Todo dia 1º, uma issue lista o que não dá para automatizar:
 | [0011](docs/adr/0011-gitops-sem-argocd.md) | GitOps sem ArgoCD: self-heal, plano no PR e auto-merge de patches |
 | [0012](docs/adr/0012-actual-budget-e-dados-bancarios.md) | Actual Budget e dados bancários sem Open Finance pago |
 | [0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md) | Dead man's switch do caminho de alertas com o healthchecks.io |
+| [0015](docs/adr/0015-contrato-de-app-por-labels.md) | Contrato de app por labels do Compose |
 
 As fontes por trás de cada decisão (SRE, GitOps, Tailscale, Let's Encrypt etc.) estão em
 [`docs/referencias.md`](docs/referencias.md).
@@ -412,8 +416,8 @@ utilizável e tem um critério de aceite verificável.
 
 ## Próximos passos
 
-Apps novos seguem o [guia de novo app](docs/adicionar-app.md): só pela tailnet, com HTTPS e
-backup.
+Apps novos saem do `make new-app` ([guia](docs/adicionar-app.md)): só pela tailnet, com
+HTTPS, healthcheck e backup.
 
 - [ ] **Exit node na VM principal.** Não é um app novo, só uma opção do Tailscale
   ([docs](https://tailscale.com/kb/1103/exit-nodes)). Em Wi-Fi público, todo o tráfego do
@@ -426,7 +430,8 @@ backup.
   duas coisas:
   - **Isolamento no Actual:**
     - *Segunda instância* (`actual-2`, com subdomínio, senha e volume próprios): ~40 MB de
-      RAM e isolamento total, no mesmo padrão do guia de novo app. **Recomendada para começar.**
+      RAM e isolamento total: `make new-app NAME=actual-2 IMAGE=actualbudget/actual-server:<versão> PORT=5006 DATA=/data HEALTH=/health READY=server-files/account.sqlite`.
+      **Recomendada para começar.**
     - *Modo multiusuário* do Actual: um servidor só, com permissão por orçamento. Exige um
       provedor OpenID, por exemplo o Pocket ID, que é leve e usa passkeys. Compensa se mais
       pessoas ou apps forem usar login único.

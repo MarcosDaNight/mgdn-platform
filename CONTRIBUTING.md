@@ -74,4 +74,4 @@ docker compose run --rm --no-deps -T --entrypoint promtool -w /etc/prometheus/te
 
 ## Adicionar um app
 
-Siga o passo a passo em [`docs/adicionar-app.md`](docs/adicionar-app.md).
+Comece por `make new-app` e siga o passo a passo em [`docs/adicionar-app.md`](docs/adicionar-app.md).
