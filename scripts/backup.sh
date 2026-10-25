@@ -52,6 +52,15 @@ if [[ -f "$vw/db.sqlite3" ]]; then
   done
   dirs+=(vaultwarden)
 fi
+
+# Certificados do Traefik: uma VM recriada volta com eles, sem servir o certificado
+# padrão enquanto reemite e sem gastar o limite semanal do Let's Encrypt.
+acme=/var/lib/docker/volumes/mgdn_traefik-acme/_data/acme.json
+if [[ -s "$acme" ]]; then
+  mkdir "$work/traefik"
+  cp "$acme" "$work/traefik/"
+  dirs+=(traefik)
+fi
 if [[ -f /var/lib/tailscale/tailscaled.state ]]; then
   mkdir "$work/tailscale"
   cp /var/lib/tailscale/tailscaled.state "$work/tailscale/"

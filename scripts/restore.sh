@@ -7,6 +7,7 @@
 #                     tailnet como o mesmo nó (mesmo IP), sem novo registro
 #   --target          destino do Headscale (padrão: volume na VM)
 #   --vw-target       destino do Vaultwarden (padrão: volume na VM)
+#   --acme-target     destino dos certificados do Traefik (padrão: volume na VM)
 #   CHAVE             objeto no bucket (padrão: o backup mais recente)
 #
 # Na VM lê /etc/mgdn-platform/env; no CI as mesmas variáveis vêm do ambiente.
@@ -26,6 +27,7 @@ if_empty=false
 with_tailscale=false
 target=/var/lib/docker/volumes/mgdn_headscale-data/_data
 vw_target=/var/lib/docker/volumes/mgdn_vaultwarden-data/_data
+acme_target=/var/lib/docker/volumes/mgdn_traefik-acme/_data
 key=""
 while (($#)); do
   case "$1" in
@@ -39,6 +41,10 @@ while (($#)); do
     vw_target="$2"
     shift
     ;;
+  --acme-target)
+    acme_target="$2"
+    shift
+    ;;
   *) key="$1" ;;
   esac
   shift
@@ -46,12 +52,13 @@ done
 
 : "${BACKUP_BUCKET:?}" "${BACKUP_AGE_IDENTITY:?}"
 
-need_hs=true need_vw=true
+need_hs=true need_vw=true need_acme=true
 if $if_empty; then
   [[ ! -f "$target/db.sqlite" ]] || need_hs=false
   [[ ! -f "$vw_target/db.sqlite3" ]] || need_vw=false
-  if ! $need_hs && ! $need_vw; then
-    log "Headscale e Vaultwarden já têm dados; nada a restaurar"
+  [[ ! -s "$acme_target/acme.json" ]] || need_acme=false
+  if ! $need_hs && ! $need_vw && ! $need_acme; then
+    log "Headscale, Vaultwarden e certificados já existem; nada a restaurar"
     exit 0
   fi
 fi
@@ -87,6 +94,12 @@ if $need_vw && [[ -f "$work/vaultwarden/db.sqlite3" ]]; then
   mkdir -p "$vw_target"
   cp -a "$work/vaultwarden/." "$vw_target/"
   log "OK: Vaultwarden de $key restaurado em $vw_target"
+fi
+
+if $need_acme && [[ -s "$work/traefik/acme.json" ]]; then
+  # O Traefik exige acme.json com permissão 600.
+  install -D -m 0600 "$work/traefik/acme.json" "$acme_target/acme.json"
+  log "OK: certificados do Traefik de $key restaurados"
 fi
 
 if $with_tailscale && $need_hs && [[ -f "$work/tailscale/tailscaled.state" ]]; then
