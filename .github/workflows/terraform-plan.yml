@@ -1,0 +1,103 @@
+name: terraform-plan
+
+# Plano do Terraform em todo PR que mexe na infra (ADR 0011): mostra no próprio PR o
+# que o apply faria, comparando com o estado real. O apply continua manual.
+#
+# Secrets (só em PRs do próprio repositório; forks e Dependabot não recebem):
+#   TF_PLAN_MGC_API_KEY           chave da Magalu SÓ LEITURA (mgdn-terraform-plan-ro)
+#   TF_PLAN_STATE_ACCESS_KEY/_SECRET_KEY  key pair da mesma chave (lê o state)
+#   TF_PLAN_TFVARS                conteúdo do terraform.tfvars (sem ele o plano
+#                                 acusaria diferença no cloud-init das VMs)
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform-plan.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      TF_VAR_mgc_api_key: ${{ secrets.TF_PLAN_MGC_API_KEY }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_PLAN_STATE_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_PLAN_STATE_SECRET_KEY }}
+      TFVARS: ${{ secrets.TF_PLAN_TFVARS }}
+    steps:
+      - name: Secrets configurados?
+        id: ready
+        working-directory: .
+        run: |
+          if [[ -n "$TF_VAR_mgc_api_key" && -n "$AWS_ACCESS_KEY_ID" && -n "$TFVARS" ]]; then
+            echo "ok=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "::notice::Secrets do terraform-plan não configurados; plano pulado."
+            echo "ok=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.ready.outputs.ok == 'true'
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          terraform_wrapper: false
+
+      - name: terraform plan
+        if: steps.ready.outputs.ok == 'true'
+        run: |
+          (umask 077 && printf '%s\n' "$TFVARS" >terraform.tfvars)
+          terraform init -input=false -no-color >/dev/null
+          terraform plan -input=false -no-color -lock=false -out=tfplan >/dev/null
+
+      - name: Resumo no PR
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # Só endereços e ações: o repositório é público, então valores nunca vão ao PR.
+          summary=$(terraform show -json tfplan | python3 -c '
+          import json, sys
+          p = json.load(sys.stdin)
+          icons = {"create": "🟢", "update": "🟡", "delete": "🔴", "replace": "🟠", "import": "📥"}
+          rows, risky = [], []
+          for r in p.get("resource_changes", []):
+              a = r["change"]["actions"]
+              kind = "replace" if set(a) == {"delete", "create"} else a[0]
+              if r["change"].get("importing"):
+                  kind = "import" if kind == "no-op" else kind
+              if kind in ("no-op", "read"):
+                  continue
+              rows.append(f"| {icons.get(kind, kind)} {kind} | `{r['address']}` |")
+              if kind in ("delete", "replace") and any(t in r["address"] for t in ("virtual_machine", "public_ips")):
+                  risky.append(r["address"])
+          if not rows:
+              print("✅ **Nenhuma mudança.** A infraestrutura corresponde ao código.")
+          else:
+              if risky:
+                  print("⚠️ **Atenção:** recria ou remove VM/IP público: " + ", ".join(f"`{x}`" for x in risky))
+                  print("Na principal, rode `make headscale-drain` antes do `make apply`.")
+                  print()
+              print("| Ação | Recurso |\n|---|---|")
+              print("\n".join(rows))
+          ')
+          body=$(printf '<!-- terraform-plan -->\n### Terraform plan\n\n%s\n\n<sub>commit %s · apply é manual (`make apply`)</sub>\n' "$summary" "${GITHUB_SHA:0:7}")
+          echo "$body" >>"$GITHUB_STEP_SUMMARY"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --jq '.[] | select(.body | startswith("<!-- terraform-plan -->")) | .id' | head -1)
+          if [[ -n "$id" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" >/dev/null
+          else
+            gh pr comment "$PR" --body "$body" >/dev/null
+          fi
