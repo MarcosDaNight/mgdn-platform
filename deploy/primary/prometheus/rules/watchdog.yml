@@ -1,0 +1,15 @@
+# Dead man's switch (ADR 0013): um alerta que dispara sempre. O Alertmanager o envia a
+# cada minuto para um check do healthchecks.io, nunca para o celular. Se os pings
+# param, o healthchecks.io avisa por fora da plataforma: o caminho Prometheus →
+# Alertmanager → internet quebrou em algum ponto.
+groups:
+  - name: watchdog
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Watchdog: o caminho de alertas está funcionando"
+          description: "Dispara sempre, de propósito. Se o healthchecks.io parar de receber este alerta, o Prometheus ou o Alertmanager não estão entregando alertas."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/watchdog.md

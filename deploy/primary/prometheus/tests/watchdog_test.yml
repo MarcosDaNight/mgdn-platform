@@ -1,0 +1,27 @@
+# Testes do dead man's switch: `promtool test rules`.
+rule_files:
+  - ../rules/watchdog.yml
+
+evaluation_interval: 30s
+
+tests:
+  # Sem nenhuma série de entrada: o Watchdog dispara desde a primeira avaliação e não
+  # para mais.
+  - interval: 1m
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels: {severity: none}
+            exp_annotations:
+              summary: "Watchdog: o caminho de alertas está funcionando"
+              description: "Dispara sempre, de propósito. Se o healthchecks.io parar de receber este alerta, o Prometheus ou o Alertmanager não estão entregando alertas."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/watchdog.md
+      - eval_time: 24h
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels: {severity: none}
+            exp_annotations:
+              summary: "Watchdog: o caminho de alertas está funcionando"
+              description: "Dispara sempre, de propósito. Se o healthchecks.io parar de receber este alerta, o Prometheus ou o Alertmanager não estão entregando alertas."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/watchdog.md
