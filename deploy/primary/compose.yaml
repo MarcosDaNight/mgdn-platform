@@ -34,8 +34,8 @@ services:
     restart: unless-stopped
     environment:
       DOMAIN: https://vault.mgdn.com.br
-      # Aberto só até a criação da conta do dono; depois um PR fecha (ADR 0010).
-      SIGNUPS_ALLOWED: "true"
+      # Fechado depois da criação da conta do dono (ADR 0010).
+      SIGNUPS_ALLOWED: "false"
       INVITATIONS_ALLOWED: "false"
       PASSWORD_HINTS_ALLOWED: "false"
       SHOW_PASSWORD_HINT: "false"

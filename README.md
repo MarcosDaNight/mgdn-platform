@@ -9,7 +9,7 @@ com orçamento-alvo de **R$ 100/mês**.
 congelado na release [`1.0.0`](https://github.com/MarcosDaNight/blocky-cloud-dns/releases/tag/1.0.0).
 O porquê da evolução está no [ADR 0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md).
 
-> 🚧 **Em construção.** Fases 0 a 4 concluídas; o roteiro abaixo mostra o restante.
+> 🚧 **Em construção.** Fases 0 a 4 concluídas, fase 5 em andamento.
 
 ## Arquitetura-alvo
 
@@ -24,9 +24,11 @@ flowchart LR
   dev == "WireGuard" ==> ts(("tailnet<br/>DNS cifrado"))
   subgraph ne1["br-ne1"]
     subgraph vm1["VM principal · BV2-2-10"]
-      hs["Headscale :443"]
+      tr["Traefik :443<br/>TLS (Let's Encrypt)"]
+      hs["Headscale"]
+      vw["Vaultwarden"]
       b1["Blocky"]
-      mon["VictoriaMetrics<br/>Grafana"]
+      mon["Prometheus<br/>Grafana"]
     end
   end
   subgraph se1["br-se1"]
@@ -38,10 +40,14 @@ flowchart LR
   lan -- "UDP/TCP 53<br/>allowlist via DDNS" --> b1
   lan -. "secundário" .-> b2
   ts --> b1
-  dev -. "controle" .-> hs
+  dev -. "controle<br/>headscale.mgdn.com.br" .-> tr
+  ts -- "vault.mgdn.com.br" --> tr
+  tr --> hs
+  tr --> vw
   b1 -- "DoH" --> up["Cloudflare / Quad9"]
   b2 -- "DoH" --> up
-  hs -. "backup" .-> bkp
+  hs -. "backup horário" .-> bkp
+  vw -.-> bkp
 ```
 
 ## Decisões (ADRs)
@@ -66,7 +72,7 @@ flowchart LR
 | VM principal BV2-2-10 (2 vCPU, 2 GB) | br-ne1 | 59,99 |
 | VM secundária BV1-1-10 (1 vCPU, 1 GB) | br-se1 | ~35 |
 | Object Storage, drills de DR, VMs efêmeras | — | centavos |
-| Domínio próprio (futuro) | — | ~3,50 |
+| Domínio mgdn.com.br (Cloudflare DNS grátis) | — | ~3,50 |
 | **Total (em produção desde 24/10/2026)** | | **≈ 95–99** |
 
 ## Estrutura
@@ -139,8 +145,9 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
 
 ### Backup e DR (ADR 0006)
 
-- **O que é salvo:** banco e chave Noise do Headscale, cache do certificado e o estado do
-  Tailscale da VM principal. Diariamente às 03:15, cifrado com `age`, num bucket com
+- **O que é salvo:** banco e chave Noise do Headscale, o cofre do Vaultwarden (ADR 0010),
+  os certificados do Traefik e o estado do Tailscale da VM principal. **De hora em hora**,
+  cifrado com `age`, num bucket com
   **object lock de 30 dias** em br-se1. Nem as credenciais do dono apagam um backup recente.
 - **VM principal recriada:** o primeiro deploy restaura o backup mais recente antes de subir
   o Headscale. Os aparelhos seguem na tailnet e a VM volta como `100.64.0.1`. **Antes do
@@ -222,4 +229,8 @@ Cada fase entrega algo utilizável e tem um critério de aceite verificável.
   - `terraform test` com provider simulado: portas, break-glass, pacotes e credenciais por
     host, validações. Inclui a regressão do PR #10, com teste de mutação comprovando que ela
     é pega.
-- [ ] **Fase 5: apps pessoais**, só pela tailnet (Vaultwarden primeiro).
+- [ ] **Fase 5: apps pessoais**, só pela tailnet ([ADR 0010](docs/adr/0010-dominio-proprio-traefik-e-vaultwarden.md)).
+  - [x] Domínio `mgdn.com.br` com DNS como código; Traefik como borda HTTPS; Headscale atrás dele.
+  - [x] **Vaultwarden** em `https://vault.mgdn.com.br`: só pela tailnet (403 de fora), backup
+    horário, restore automático e drill mensal.
+  - [ ] Migrar os aparelhos para `headscale.mgdn.com.br` e aposentar o DuckDNS.
