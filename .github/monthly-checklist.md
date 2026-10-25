@@ -5,7 +5,7 @@ Checklist mensal de manutenção do mgdn-platform. Marque os itens e feche a iss
 - [ ] `make allowlist`: o IP liberado é igual ao IP atual de casa (`curl -s https://1.1.1.1/cdn-cgi/trace | grep ip=`).
 
 ### Saúde
-- [ ] <https://healthchecks.io>: os três checks (**principal**, **secundária**, **backup**) estão *up*, sem falhas inesperadas no mês.
+- [ ] <https://healthchecks.io>: os quatro checks (**principal**, **secundária**, **backup**, **watchdog**) estão *up*, sem falhas inesperadas no mês.
 - [ ] `make test`: as duas VMs e a tailnet resolvem e bloqueiam.
 - [ ] `make status` e `make status HOST=mgdn-secondary`: RAM disponível > 100 MB, disco < 80%, commit aplicado igual ao último da `main`.
 
