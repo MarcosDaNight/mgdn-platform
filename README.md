@@ -1,17 +1,38 @@
 # mgdn-platform
 
-Plataforma pessoal na [Magalu Cloud](https://magalu.cloud): DNS com bloqueio de anúncios e
-rastreadores que funciona **em casa e fora dela**, uma rede privada (tailnet) para acessar
-tudo sem expor serviços na internet, e redundância entre regiões. Tudo em VMs pequenas,
-com orçamento-alvo de **R$ 100/mês**.
+[![ci](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/ci.yml)
+[![supply-chain](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/supply-chain.yml/badge.svg)](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/supply-chain.yml)
+[![dr-drill](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/dr-drill.yml/badge.svg)](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/dr-drill.yml)
+[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
+
+Plataforma pessoal na [Magalu Cloud](https://magalu.cloud). Ela oferece:
+
+- **DNS com bloqueio de anúncios e rastreadores**, em casa e fora dela;
+- **uma rede privada (tailnet)** para acessar tudo sem expor serviços na internet;
+- **um gerenciador de senhas** (Vaultwarden) que só abre pela tailnet;
+- **redundância entre regiões** e backups imutáveis.
+
+Tudo roda em duas VMs pequenas, com orçamento de **~R$ 100/mês**, e é operado por IaC e
+GitOps: o estado desejado vive neste repositório e as VMs se reconciliam sozinhas.
 
 É a evolução do [blocky-cloud-dns](https://github.com/MarcosDaNight/blocky-cloud-dns),
-congelado na release [`1.0.0`](https://github.com/MarcosDaNight/blocky-cloud-dns/releases/tag/1.0.0).
-O porquê da evolução está no [ADR 0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md).
+congelado na release [`1.0.0`](https://github.com/MarcosDaNight/blocky-cloud-dns/releases/tag/1.0.0)
+([ADR 0004](docs/adr/0004-evolucao-do-blocky-cloud-dns.md)).
 
-> 🚧 **Em construção.** Fases 0 a 4 concluídas, fase 5 em andamento.
+## Sumário
 
-## Arquitetura-alvo
+- [Arquitetura](#arquitetura)
+- [Como as mudanças chegam às VMs](#como-as-mudanças-chegam-às-vms)
+- [Observabilidade](#observabilidade)
+- [Segurança](#segurança)
+- [Operação](#operação)
+- [Decisões (ADRs)](#decisões-adrs)
+- [Orçamento](#orçamento)
+- [Estrutura do repositório](#estrutura-do-repositório)
+- [Histórico](#histórico)
+- [Licença](#licença)
+
+## Arquitetura
 
 ```mermaid
 flowchart LR
@@ -50,6 +71,228 @@ flowchart LR
   vw -.-> bkp
 ```
 
+| Componente | Onde | Papel |
+|---|---|---|
+| **Blocky** | as duas VMs | DNS com bloqueio; upstream por DoH (Cloudflare e Quad9) |
+| **Headscale** | principal | servidor de controle da tailnet; o Blocky é o DNS dela ([ADR 0003](docs/adr/0003-tailnet-com-headscale.md)) |
+| **Traefik** | principal | borda HTTPS com certificados por DNS-01, sem socket do Docker |
+| **Vaultwarden** | principal | cofre de senhas em `vault.mgdn.com.br`, só pela tailnet |
+| **Prometheus, Alertmanager, Grafana, blackbox** | principal | métricas, SLO, alertas no celular (ntfy) e dashboards |
+| **node-exporter** | as duas VMs | métricas do host e do GitOps |
+| **Object Storage** | br-se1 | backups cifrados com object lock de 30 dias |
+| **Cloudflare** | — | DNS público de `mgdn.com.br`, gerenciado como código |
+
+**Rede.** Na porta 53 pública, só o IP de casa é aceito. Ele é atualizado por DDNS. Fora de
+casa, os aparelhos usam o Blocky (`100.64.0.1`, com `100.64.0.4` de reserva) pela tailnet.
+A porta 22 fica fechada para a internet, e o SSH também passa pela tailnet.
+
+## Como as mudanças chegam às VMs
+
+O merge na `main` é o deploy. Nenhuma credencial de produção sai das VMs, e nenhum agente
+externo tem acesso a elas.
+
+```mermaid
+flowchart LR
+  pr["PR"] --> ci["CI: lint, testes,<br/>Trivy, terraform plan"]
+  ci --> main["merge na main"]
+  main -. "pull a cada 2 min" .-> sync["gitops-sync<br/>(cada VM)"]
+  sync --> v["valida"] --> a["aplica"] --> h{"DNS<br/>responde?"}
+  h -- "sim" --> ok["commit aplicado"]
+  h -- "não" --> rb["rollback"]
+  main -. "infra/ muda" .-> apply["make apply<br/>(manual)"]
+```
+
+### Aplicações (GitOps pull-based)
+
+O `mgdn-gitops.timer` roda [`scripts/gitops-sync.sh`](scripts/gitops-sync.sh) em cada VM.
+Ele aplica `deploy/<papel>/compose.yaml`, em que o papel é `primary` ou `secondary`.
+
+1. **Valida** o commit novo antes de tocar em qualquer coisa: `compose config`, a
+   configuração do Blocky, `promtool check` e `promtool test rules`, `amtool`, o blackbox e o
+   `headscale configtest`.
+2. **Aplica:** units do systemd, imagens e containers. Também reinicia os serviços cuja
+   configuração mudou.
+3. **Verifica:** o DNS tem de responder em até ~1 min. Se não responder, volta ao último commit
+   bom e marca o novo como falho.
+4. **Self-heal:** sem commit novo, roda `compose up -d`. Um container parado ou removido à mão
+   volta ao estado do Git em até ~2 min. Cada correção conta em
+   `mgdn_gitops_drift_corrections_total`.
+
+Por que isso e não ArgoCD: [ADR 0011](docs/adr/0011-gitops-sem-argocd.md).
+
+### Infraestrutura (Terraform)
+
+- O state fica num bucket da Magalu. A Cloudflare (DNS) também é gerenciada como código
+  ([`infra/dns.tf`](infra/dns.tf)).
+- **Em todo PR que mexe em `infra/`**, o workflow `terraform-plan` comenta o resultado do
+  plano, só com ações e endereços. Recriar uma VM ou um IP público ganha um aviso ⚠️.
+- O workflow usa uma chave **só de leitura**. O apply continua manual (`make apply`), porque
+  recriar a principal pede `make headscale-drain` antes.
+- Os secrets são `TF_PLAN_MGC_API_KEY`, `TF_PLAN_STATE_ACCESS_KEY`,
+  `TF_PLAN_STATE_SECRET_KEY` e `TF_PLAN_TFVARS`. Sem eles, o plano é pulado.
+
+### Workflows do GitHub
+
+| Workflow | Quando | O que faz |
+|---|---|---|
+| `ci` | PR e push | pre-commit, `terraform validate` e `test`, `compose config`, `promtool test rules` |
+| `supply-chain` | PR e push | imagens fixas por digest e Actions por SHA; Trivy barra CRITICAL com correção ([ADR 0008](docs/adr/0008-cadeia-de-suprimentos.md)) |
+| `terraform-plan` | PR em `infra/` | plano comentado no PR (acima) |
+| `dependabot-auto-merge` | PR do Dependabot | atualizações **patch** entram sozinhas depois do CI verde; minor e major esperam revisão |
+| `dr-drill` | todo dia 2 | restaura o backup num runner descartável e publica RTO e RPO numa issue |
+| `monthly-checklist` | todo dia 1º | abre a issue com as verificações manuais do mês |
+
+A `main` é protegida: todo merge precisa de PR e dos checks `terraform`, `deploy-config`
+(primary e secondary), `pre-commit` e `supply-chain`.
+
+## Observabilidade
+
+Os painéis ficam em `make tunnel`, que abre o Grafana em `localhost:3000`.
+
+| Dashboard | Mostra |
+|---|---|
+| **SLO do DNS** | disponibilidade em 30 dias, orçamento de erro restante e taxa de consumo |
+| **Plataforma (GitOps)** | commit aplicado por host, resultado e idade do último sync, correções de desvio |
+| **Blocky** | consultas, bloqueios, cache e latência |
+| **Node Exporter** | CPU, RAM, disco e rede das VMs |
+
+### SLO e alertas ([ADR 0009](docs/adr/0009-slo-e-alertas.md))
+
+- **SLO: 99,9% em 30 dias** para "o DNS resolve e bloqueia". O orçamento de erro é de
+  ~43 min/mês. As sondas rodam a cada 30 s nos dois Blockys.
+- **Os alertas chegam no celular pelo ntfy.** Cada um aponta para um runbook em
+  [`docs/runbooks/`](docs/runbooks/).
+
+  | Alerta | Runbook |
+  |---|---|
+  | Queda real (queima rápida do orçamento) ou degradação (queima lenta) | [dns-error-budget](docs/runbooks/dns-error-budget.md) |
+  | Um resolver fora (perda de redundância) | [dns-resolver-down](docs/runbooks/dns-resolver-down.md) |
+  | Alvo sem coleta | [monitoring-target-down](docs/runbooks/monitoring-target-down.md) |
+  | GitOps falhando, atrasado, parado ou corrigindo desvio em loop | [gitops](docs/runbooks/gitops.md) |
+
+- **Configurar:** instale o app **ntfy**, assine o tópico secreto e coloque
+  `https://ntfy.sh/<tópico>?template=alertmanager` em `alert_ntfy_url`. Isso recria a
+  principal, então rode `make headscale-drain` antes.
+- As regras têm testes em `deploy/primary/prometheus/tests/`. Eles rodam no CI e na VM antes
+  de cada deploy.
+
+Além disso, cada VM e o backup pingam checks no healthchecks.io. Assim, uma VM fora do ar
+também é notada.
+
+## Segurança
+
+- **Superfície mínima:** a porta 53 só aceita o IP de casa, a 443 serve o Traefik e a 22 fica
+  fechada. O Vaultwarden e os painéis só abrem pela tailnet. Fora dela, o Vaultwarden responde
+  403, e o nome `vault.mgdn.com.br` nem existe no DNS público.
+- **Segredos fora do repositório:**
+  - os tokens e URLs secretas chegam às VMs pelo cloud-init, a partir do `terraform.tfvars`
+    (fora do Git);
+  - os containers os leem de arquivos com permissão restrita.
+- **Backups:**
+  - são cifrados com `age`; a chave privada fica no gerenciador de senhas;
+  - ficam num bucket com object lock COMPLIANCE, que nem o dono apaga antes de 30 dias.
+- **Cadeia de suprimentos:**
+  - imagens e Actions são fixadas por hash;
+  - o Trivy roda em todo PR;
+  - o Dependabot propõe as atualizações.
+- **Repositório público:** IP de casa, hostname do DDNS, URLs de healthcheck e tópicos do ntfy
+  nunca entram no Git. O plano do Terraform no PR mostra só endereços, nunca valores.
+
+## Operação
+
+`make help` lista tudo. O acesso às VMs é **pela tailnet** (`HOST=mgdn-primary`).
+
+| Comando | O que faz |
+|---|---|
+| `make status [HOST=mgdn-secondary]` | commit aplicado, containers, tailnet, timers, RAM e disco |
+| `make sync` | força o GitOps sync agora |
+| `make test` | resolve e bloqueia nas duas VMs (IPs públicos) e pela tailnet |
+| `make tailnet-nodes` | aparelhos na tailnet |
+| `make tailnet-register AUTH_ID=… NAME=…` | aprova (e nomeia) um aparelho novo |
+| `make allowlist` | IP de casa liberado na porta 53 e últimas trocas |
+| `make querylog` / `make logs` | domínios bloqueados / logs dos containers |
+| `make tunnel` | Grafana, Prometheus, Alertmanager e API do Blocky em `localhost` |
+| `make backup` / `make backups` | backup agora / lista os backups no bucket |
+| `make plan` / `make apply` | Terraform local (credenciais em `.env`) |
+| `make lint` / `make test-infra` | pre-commit e `terraform test` |
+
+### Mudar a configuração do Blocky
+
+Edite [`deploy/common/blocky/config.yml`](deploy/common/blocky/config.yml) (listas,
+allowlists, `customDNS`) e abra um PR. Com o CI verde e o merge, as duas VMs aplicam em até
+2 min. Se o Blocky não subir, o rollback é automático.
+
+### Colocar um aparelho na tailnet
+
+- **iPhone/Android:**
+  1. No app do Tailscale, toque em *Log in…*.
+  2. Abra o menu **⋯** no canto superior direito e escolha *Use custom coordination server*.
+  3. Informe `https://headscale.mgdn.com.br`.
+  4. O app mostra `headscale auth register --auth-id <id> --user USERNAME`. Rode
+     `make tailnet-register AUTH_ID=<id> NAME=iphone`. O iOS se registra como `localhost`, e o
+     `NAME` o renomeia.
+  5. Em *DNS settings*, mantenha **Use Tailscale DNS settings** ligado.
+- **Linux:** rode `sudo tailscale up --login-server https://headscale.mgdn.com.br --authkey <chave>`.
+  A chave vem de `make tailnet-key`; é de uso único e vale 30 min.
+
+Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qualquer rede.
+
+### DNS secundário (VM em br-se1)
+
+- **Roteador:** em *Servidor DHCP*, use `primary_ip` como DNS primário e `secondary_ip` como
+  secundário (`terraform -chdir=infra output`). As duas VMs bloqueiam igual.
+- **Recriar a secundária:** ela entra na tailnet com uma chave de uso único.
+  1. Gere a chave com `make tailnet-key`.
+  2. Coloque-a em `secondary_tailnet_authkey` no `terraform.tfvars`.
+  3. Rode `make apply` em até 30 min.
+- Depois, remova o nó antigo (`make tailnet-nodes`, depois `headscale nodes delete -i <id>`).
+  Se o IP dela mudar, atualize `dns.nameservers.global` no Headscale por PR.
+
+### Backup e DR ([ADR 0006](docs/adr/0006-backup-imutavel-e-restore-drill.md))
+
+- **O que é salvo, de hora em hora:**
+  - banco e chave Noise do Headscale;
+  - o cofre do Vaultwarden;
+  - os certificados do Traefik;
+  - o estado do Tailscale da VM principal.
+- **Recriar a VM principal:** **antes do `make apply`, rode `make headscale-drain`.**
+  - O drain faz um backup novo e para o Headscale de forma limpa.
+  - Sem ele, clientes Linux com conexão longa ficam até ~15 min presos a uma conexão TCP meio
+    aberta com a VM destruída.
+  - O primeiro deploy restaura o backup mais recente antes de subir os serviços. Os aparelhos
+    seguem na tailnet e a VM volta como `100.64.0.1`.
+- **Rotação ([ADR 0007](docs/adr/0007-rotacao-dos-backups.md)):**
+  - Guarda todos os backups dos últimos 30 dias e o primeiro de cada mês por 12 meses,
+    nunca menos de 7 (~43 no total).
+  - Roda na VM, porque a Magalu não oferece lifecycle.
+  - Simulação: `sudo /opt/mgdn-platform/scripts/prune.sh --dry-run`.
+- **Restore drill:** fora de hora, use *Actions → dr-drill → Run workflow*. Uma falha deixa a
+  issue aberta e notifica.
+- **Restore manual de um backup específico:** na VM principal, pare o Headscale
+  (`docker compose stop headscale`), rode
+  `sudo /opt/mgdn-platform/scripts/restore.sh --with-tailscale headscale/<AAAAMMDDTHHMMSSZ>.tar.gz.age`
+  e depois `start`.
+
+### SSH de emergência (break-glass)
+
+Se a tailnet estiver fora:
+
+1. Defina `ssh_break_glass = true` no `terraform.tfvars` e rode `make apply`. Isso abre a
+   porta 22, ainda filtrada pelo allowlist de casa, **sem recriar a VM**.
+2. Acesse com `make ssh HOST=<IP público>`.
+3. Desligue a opção depois.
+
+### Checklist mensal
+
+Todo dia 1º, uma issue lista o que não dá para automatizar:
+
+- o hostname no No-IP;
+- os checks do healthchecks.io;
+- a issue do DR drill;
+- os aparelhos da tailnet;
+- os PRs do Dependabot que esperam revisão;
+- os prazos das credenciais.
+
 ## Decisões (ADRs)
 
 | # | Decisão |
@@ -64,6 +307,7 @@ flowchart LR
 | [0008](docs/adr/0008-cadeia-de-suprimentos.md) | Cadeia de suprimentos: digests fixos e varredura das imagens |
 | [0009](docs/adr/0009-slo-e-alertas.md) | SLO do DNS com orçamento de erro e alertas no celular |
 | [0010](docs/adr/0010-dominio-proprio-traefik-e-vaultwarden.md) | Domínio próprio, Traefik como borda HTTPS e Vaultwarden só na tailnet |
+| [0011](docs/adr/0011-gitops-sem-argocd.md) | GitOps sem ArgoCD: self-heal, plano no PR e auto-merge de patches |
 
 ## Orçamento
 
@@ -75,163 +319,65 @@ flowchart LR
 | Domínio mgdn.com.br (Cloudflare DNS grátis) | — | ~3,50 |
 | **Total (em produção desde 24/10/2026)** | | **≈ 95–99** |
 
-## Estrutura
+## Estrutura do repositório
 
 ```
 infra/                     Terraform (state remoto no Object Storage da Magalu)
   main.tf                  hosts da plataforma e import do IP herdado do v1
   dns.tf                   zona mgdn.com.br na Cloudflare (registros como código)
   modules/host/            uma VM: security group, IP público protegido, cloud-init
+  tests/                   terraform test com provider simulado
 deploy/                    o que roda nas VMs (fonte da verdade do GitOps)
   common/blocky/           configuração do Blocky, compartilhada pelos papéis
-  primary/compose.yaml     headscale, blocky, prometheus, node-exporter, grafana
+  common/platform.env      nomes públicos da plataforma (hostname do Headscale)
+  primary/compose.yaml     traefik, headscale, vaultwarden, blocky e monitoramento
   primary/headscale/       configuração do Headscale (DNS da tailnet = Blocky)
   primary/traefik/         borda HTTPS: Headscale e apps da tailnet (certificados por DNS-01)
   primary/backup/          chave pública age que cifra os backups
   primary/blackbox/        sondas DNS (resolve e bloqueia) que alimentam o SLI
-  primary/prometheus/      coleta, regras de SLO/alertas (rules/) e testes (tests/)
+  primary/prometheus/      coleta, regras de SLO/GitOps (rules/) e testes (tests/)
   primary/alertmanager/    envio dos alertas ao ntfy
-  secondary/compose.yaml   só o Blocky (DNS secundário em br-se1)
-  systemd/                 timers: gitops, healthcheck, allowlist, limpeza semanal
+  primary/grafana/         datasource e dashboards provisionados
+  secondary/compose.yaml   Blocky e node-exporter (DNS secundário em br-se1)
+  systemd/                 timers: gitops, healthcheck, allowlist, backup, limpeza semanal
 scripts/
-  gitops-sync.sh           por papel: validar → aplicar → verificar → rollback
-  tailnet-join.sh          registra a VM principal na tailnet (100.64.0.1)
+  gitops-sync.sh           por papel: validar → aplicar → verificar → rollback; self-heal e métricas
+  tailnet-join.sh          registra a VM na tailnet
   allowlist.sh             porta 53 pública só para o IP de casa (DDNS)
   healthcheck.sh           DNS, bloqueio, tráfego de casa, disco, Headscale, DNS da tailnet
-  backup.sh / restore.sh   backup cifrado e imutável do Headscale; restore automático no boot
+  backup.sh / restore.sh   backup cifrado e imutável; restore automático no primeiro deploy
   prune.sh / retention.py  rotação: 30 dias de diários + 12 mensais (mín. 7)
   s3.sh                    cliente S3 mínimo (curl --aws-sigv4)
 docs/adr/                  decisões de arquitetura
 docs/runbooks/             o que fazer quando cada alerta tocar
+.github/workflows/         CI, supply chain, terraform plan, auto-merge, DR drill, checklist
 ```
 
-## Operação
+## Histórico
 
-`make help` lista tudo. O acesso às VMs é **pela tailnet** (`HOST=mgdn-primary`).
+A plataforma foi construída em fases. Cada fase entregou algo utilizável e tinha um critério
+de aceite verificável. Todas foram concluídas em outubro de 2026.
 
-| Comando | O que faz |
+| Fase | Entrega | Aceite medido |
+|---|---|---|
+| 0. Fundação | repositório, ADRs, CI, release `1.0.0` do v1 | — |
+| 1. Tailnet | VM principal herdando o IP do v1; Headscale; Blocky como DNS da tailnet | o iPhone no 4G passa pelo Blocky; a porta 22 tem 100% de perda em sondas externas; a troca deixou a casa ~5 min sem DNS |
+| 2. Redundância | Blocky secundário em br-se1 | com o Blocky da principal parado, a casa seguiu resolvendo e bloqueando pela secundária (90–170 ms) |
+| 3. Backup e DR | backup imutável entre regiões, restore drill mensal | veja a tabela abaixo |
+| 4. Engenharia | IP real dos clientes no Blocky, checklist mensal, supply chain, SLO e alertas, `terraform test` (com teste de mutação) | — |
+| 5. Apps pessoais | domínio `mgdn.com.br` como código, Traefik, Vaultwarden só na tailnet, migração dos aparelhos sem novo registro | Vaultwarden responde 403 fora da tailnet |
+| Finalização | self-heal e métricas do GitOps, plano no PR, auto-merge de patches ([ADR 0011](docs/adr/0011-gitops-sem-argocd.md)) | um container parado à mão voltou sozinho no sync seguinte |
+
+**Medições de DR:**
+
+| Medição | Resultado |
 |---|---|
-| `make status [HOST=mgdn-secondary]` | commit aplicado, containers, tailnet, timers, RAM e disco |
-| `make test` | resolve e bloqueia nas duas VMs (IPs públicos) e pela tailnet |
-| `make tailnet-nodes` | aparelhos na tailnet |
-| `make tailnet-register AUTH_ID=… NAME=…` | aprova (e nomeia) um aparelho novo |
-| `make allowlist` | IP de casa liberado na porta 53 e últimas trocas |
-| `make querylog` / `make logs` | domínios bloqueados / logs dos containers |
-| `make tunnel` | Grafana, Prometheus e API do Blocky em `localhost` |
-| `make backup` / `make backups` | backup do Headscale agora / lista os backups no bucket |
+| Restore drill (runner descartável) | RTO **6 s**, RPO **0 h** ([issue #9](https://github.com/MarcosDaNight/mgdn-platform/issues/9)) |
+| Recriação real da VM principal: do apply ao Headscale servindo o estado restaurado | **172 s** |
+| RPO da recriação (do backup ao apply) | **6 min** |
+| DNS fora do ar durante a recriação | **0** (a secundária atendeu a casa e a tailnet) |
+| Aparelhos que precisaram entrar de novo | **0** (mesmas `machine_key` e IPs) |
 
-### Colocar um aparelho na tailnet
+## Licença
 
-- **iPhone/Android:** no app do Tailscale, toque em *Log in…*, abra o menu **⋯** no canto
-  superior direito, escolha *Use custom coordination server* e informe
-  `https://headscale.mgdn.com.br`. O app mostra
-  `headscale auth register --auth-id <id> --user USERNAME`: rode
-  `make tailnet-register AUTH_ID=<id> NAME=iphone` (o iOS se registra como `localhost`;
-  o `NAME` renomeia). Em *DNS settings*, mantenha **Use Tailscale DNS settings** ligado.
-- **Linux:** `sudo tailscale up --login-server https://headscale.mgdn.com.br --authkey <chave>`,
-  com a chave gerada por `make tailnet-key` (uso único, vale 30 min).
-
-Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qualquer rede.
-
-### DNS secundário (VM em br-se1)
-
-- **Roteador:** em *Servidor DHCP*, DNS primário = `primary_ip` e DNS secundário =
-  `secondary_ip` (`terraform -chdir=infra output`). As duas VMs bloqueiam igual.
-- **Recriar a secundária:** ela entra na tailnet com uma chave de uso único. Gere com
-  `make tailnet-key`, coloque em `secondary_tailnet_authkey` no `terraform.tfvars` e rode
-  `make apply` em até 30 min.
-- Cada VM pinga o próprio check no healthchecks.io (`healthcheck_url` e
-  `secondary_healthcheck_url`).
-
-### Backup e DR (ADR 0006)
-
-- **O que é salvo:** banco e chave Noise do Headscale, o cofre do Vaultwarden (ADR 0010),
-  os certificados do Traefik e o estado do Tailscale da VM principal. **De hora em hora**,
-  cifrado com `age`, num bucket com
-  **object lock de 30 dias** em br-se1. Nem as credenciais do dono apagam um backup recente.
-- **VM principal recriada:** o primeiro deploy restaura o backup mais recente antes de subir
-  o Headscale. Os aparelhos seguem na tailnet e a VM volta como `100.64.0.1`. **Antes do
-  `make apply`, rode `make headscale-drain`**: ele faz um backup novo e para o Headscale de
-  forma limpa. Sem isso, clientes Linux com conexão longa ficam até ~15 min presos a uma
-  conexão TCP meio aberta com a VM destruída (o túnel de dados não cai nesse meio-tempo).
-- **Rotação (ADR 0007):** depois de cada backup, mantém todos os dos últimos 30 dias, o
-  primeiro de cada mês por 12 meses e nunca menos de 7 (~43 no total). A Magalu não oferece
-  lifecycle, então a rotação roda na VM; o object lock impede que algo com menos de 30 dias
-  seja apagado, mesmo por engano. Simulação: `sudo /opt/mgdn-platform/scripts/prune.sh --dry-run`.
-- **Restore drill:** todo dia 2 o workflow `dr-drill` restaura o backup num runner
-  descartável, confere os nós e abre uma issue `dr-drill` com RTO e RPO. Uma falha fica
-  aberta e notifica. Para rodar fora de hora: *Actions → dr-drill → Run workflow*.
-- **Restore manual** (ex.: voltar a um backup específico): na VM principal,
-  `sudo /opt/mgdn-platform/scripts/restore.sh --with-tailscale headscale/<AAAAMMDDTHHMMSSZ>.tar.gz.age`
-  com o Headscale parado (`docker compose stop headscale`), e depois `start`.
-- **Chave privada `age`:** guardada no gerenciador de senhas. Sem ela, nenhum backup pode
-  ser lido.
-- **VM secundária recriada:** ela não tem estado, então entra na tailnet como um nó novo, com
-  outro IP. Remova o nó antigo (`make tailnet-nodes`, depois `headscale nodes delete -i <id>`)
-  e atualize o IP dela em `dns.nameservers.global` no Headscale (PR).
-
-### SLO e alertas (ADR 0009)
-
-- **SLO: 99,9% em 30 dias** para "o DNS resolve e bloqueia" (~43 min/mês de orçamento de
-  erro). Sondas a cada 30 s nos dois Blockys; o dashboard **SLO do DNS** (`make tunnel`,
-  Grafana) mostra a disponibilidade, o orçamento restante e a taxa de consumo.
-- **Alertas no celular (ntfy):** queda real (queima rápida do orçamento), degradação
-  (queima lenta), um resolver fora (perda de redundância) e alvo sem coleta. Cada um aponta
-  para um runbook em [`docs/runbooks/`](docs/runbooks/).
-- **Configurar:** instale o app **ntfy**, assine o tópico secreto e coloque
-  `https://ntfy.sh/<tópico>?template=alertmanager` em `alert_ntfy_url`. Isso recria a
-  principal: rode `make headscale-drain` antes.
-- As regras têm testes (`promtool test rules`, em `deploy/primary/prometheus/tests/`)
-  rodados no CI e na VM antes de cada deploy.
-
-### Checklist mensal
-
-Todo dia 1º o workflow `monthly-checklist` abre uma issue atribuída ao dono do repo com as
-verificações do mês: confirmar o hostname no No-IP, os três checks do healthchecks.io, a
-issue do DR drill, os aparelhos da tailnet, os PRs do Dependabot e os prazos das
-credenciais. Para abrir fora de hora: *Actions → monthly-checklist → Run workflow*.
-
-### SSH de emergência (break-glass)
-
-Se a tailnet estiver fora, defina `ssh_break_glass = true` no `terraform.tfvars` e rode
-`make apply`: abre a porta 22 no security group, ainda filtrada pelo allowlist de casa,
-**sem recriar a VM**. Acesse com `make ssh HOST=<IP público>` e desligue depois.
-
-## Roteiro
-
-Cada fase entrega algo utilizável e tem um critério de aceite verificável.
-
-- [x] **Fase 0: fundação.** Repositório, ADRs, CI e release `1.0.0` do v1.
-- [x] **Fase 1: tailnet.** VM principal herdando o IP do v1, Headscale e o Blocky como DNS da
-  tailnet. *Aceite: o celular no 4G bloqueia anúncios e a porta 22 fica fechada para a
-  internet.* Concluída em 24/10/2026: a troca do v1 deixou a casa ~5 min sem DNS; o iPhone
-  no 4G passa pelo Blocky; a porta 22 fecha com 100% de perda em sondas externas.
-- [x] **Fase 2: redundância.** Blocky secundário em br-se1. *Aceite: desligar a VM principal
-  não derruba o DNS de casa.* Concluída em 24/10/2026: com o Blocky da principal parado, o
-  resolvedor do sistema seguiu respondendo pela secundária (90–170 ms) e bloqueando; o log
-  da secundária registrou as consultas.
-- [x] **Fase 3: backup e DR.** Backup imutável entre regiões e restore drill mensal
-  automatizado. *Aceite: RTO e RPO medidos e publicados.* Concluída em 24/10/2026:
-
-  | Medição | Resultado |
-  |---|---|
-  | Restore drill (runner descartável) | RTO **6 s**, RPO **0 h** ([issue #9](https://github.com/MarcosDaNight/mgdn-platform/issues/9)) |
-  | Recriação real da VM principal: apply → Headscale servindo o estado restaurado | **172 s** |
-  | RPO da recriação (backup → apply) | **6 min** |
-  | DNS fora do ar durante a recriação | **0** (a secundária atendeu casa e tailnet) |
-  | Aparelhos que precisaram entrar de novo | **0** (mesmas `machine_key` e IPs) |
-- [x] **Fase 4: engenharia.** Concluída em 24/10/2026:
-  - IP real dos clientes da tailnet no Blocky (a causa era o SNAT do próprio Tailscale);
-  - checklist mensal;
-  - imagens por digest, Actions por SHA e Trivy no CI ([ADR 0008](docs/adr/0008-cadeia-de-suprimentos.md));
-  - SLO 99,9% com alertas por burn rate no celular, runbooks e a secundária monitorada
-    ([ADR 0009](docs/adr/0009-slo-e-alertas.md)), com as regras cobertas por `promtool test rules`;
-  - `terraform test` com provider simulado: portas, break-glass, pacotes e credenciais por
-    host, validações. Inclui a regressão do PR #10, com teste de mutação comprovando que ela
-    é pega.
-- [ ] **Fase 5: apps pessoais**, só pela tailnet ([ADR 0010](docs/adr/0010-dominio-proprio-traefik-e-vaultwarden.md)).
-  - [x] Domínio `mgdn.com.br` com DNS como código; Traefik como borda HTTPS; Headscale atrás dele.
-  - [x] **Vaultwarden** em `https://vault.mgdn.com.br`: só pela tailnet (403 de fora), backup
-    horário, restore automático e drill mensal.
-  - [x] Aparelhos migrados para `headscale.mgdn.com.br` (`tailscale up --force-reauth`: mesmos
-    nós e IPs, só a chave do nó renovada) e DuckDNS aposentado.
+[MIT](LICENSE) © 2026 Marcos Guillermo.
