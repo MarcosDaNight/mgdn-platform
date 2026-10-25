@@ -10,6 +10,8 @@ set -euo pipefail
 
 # shellcheck source=/dev/null
 source /etc/mgdn-platform/env
+# shellcheck source=/dev/null
+source /opt/mgdn-platform/deploy/common/platform.env
 user=platform
 expected_ip=100.64.0.1
 

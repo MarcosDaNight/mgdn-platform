@@ -124,11 +124,11 @@ docs/runbooks/             o que fazer quando cada alerta tocar
 
 - **iPhone/Android:** no app do Tailscale, toque em *Log in…*, abra o menu **⋯** no canto
   superior direito, escolha *Use custom coordination server* e informe
-  `https://mgdn-platform.duckdns.org`. O app mostra
+  `https://headscale.mgdn.com.br`. O app mostra
   `headscale auth register --auth-id <id> --user USERNAME`: rode
   `make tailnet-register AUTH_ID=<id> NAME=iphone` (o iOS se registra como `localhost`;
   o `NAME` renomeia). Em *DNS settings*, mantenha **Use Tailscale DNS settings** ligado.
-- **Linux:** `sudo tailscale up --login-server https://mgdn-platform.duckdns.org --authkey <chave>`,
+- **Linux:** `sudo tailscale up --login-server https://headscale.mgdn.com.br --authkey <chave>`,
   com a chave gerada por `make tailnet-key` (uso único, vale 30 min).
 
 Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qualquer rede.
