@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Backup do Headscale (ADR 0006) e do Vaultwarden (ADR 0010): snapshots
+# Backup do Headscale (ADR 0006), do Vaultwarden (ADR 0010) e do Actual Budget
+# (ADR 0012): snapshots
 # consistentes dos SQLite, chave Noise, cache ACME, dados do Vaultwarden e o estado
 # do cliente Tailscale desta VM, cifrados com a chave
 # pública age do repositório e enviados ao bucket imutável (object lock) em br-se1.
@@ -51,6 +52,22 @@ if [[ -f "$vw/db.sqlite3" ]]; then
     [[ ! -d "$vw/$d" ]] || cp -r "$vw/$d" "$work/vaultwarden/"
   done
   dirs+=(vaultwarden)
+fi
+
+# Actual Budget (ADR 0012): contas e senha do servidor (server-files) e orçamentos
+# (user-files). Cópia do diretório inteiro; cada SQLite é trocado por um snapshot
+# consistente, já que o app pode estar gravando.
+ab=/var/lib/docker/volumes/mgdn_actual-data/_data
+if [[ -f "$ab/server-files/account.sqlite" ]]; then
+  cp -a "$ab" "$work/actual"
+  while IFS= read -r -d '' db; do
+    rel=${db#"$ab"/}
+    # O snapshot já inclui o WAL; uma cópia velha dele ao lado corromperia o restore.
+    rm -f "$work/actual/$rel-wal" "$work/actual/$rel-shm"
+    sqlite3 "$db" ".backup '$work/actual/$rel'"
+    [[ "$(sqlite3 "$work/actual/$rel" 'PRAGMA integrity_check;')" == "ok" ]]
+  done < <(find "$ab" -name '*.sqlite' -print0)
+  dirs+=(actual)
 fi
 
 # Certificados do Traefik: uma VM recriada volta com eles, sem servir o certificado
