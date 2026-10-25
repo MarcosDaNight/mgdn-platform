@@ -49,8 +49,8 @@ Alternativas descartadas:
 ## Consequências
 
 - Custo desprezível: ~11 KB por backup.
-- O escopo das chaves da Magalu é por serviço, não por bucket: a chave da VM também
-  enxerga outros buckets da conta. O object lock limita o estrago nos backups; o bucket do
+- A chave da VM tem permissão no serviço de Object Storage, não num bucket só: ela também
+  alcança os outros buckets da conta. O object lock limita o estrago nos backups; o bucket do
   state do Terraform depende só do versionamento.
 - A chave privada `age` na VM permite decifrar backups antigos, mas quem compromete a VM já
   tem o estado vivo do Headscale, então a exposição adicional é marginal.

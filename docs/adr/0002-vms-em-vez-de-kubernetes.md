@@ -8,7 +8,7 @@
 A evolução natural de um "homelab na nuvem" costuma ser o Kubernetes (gerenciado ou k3s),
 com ArgoCD, Kyverno, Loki e afins. As restrições reais deste projeto são:
 
-- **Orçamento:** alvo de R$ 100/mês, teto de R$ 135, com R$ 300/mês de crédito.
+- **Orçamento:** alvo de R$ 100/mês, teto de R$ 135.
 - **Carga:** 1 usuário e poucos serviços leves (Blocky ~75 MB, Headscale ~50 MB).
 - **Preços medidos ou cotados na Magalu Cloud (out/2026):**
 
@@ -20,7 +20,8 @@ com ArgoCD, Kyverno, Loki e afins. As restrições reais deste projeto são:
 
 Só a camada de plataforma do Kubernetes (control plane + ArgoCD + Kyverno + Loki) consome
 2–3 GB de RAM antes de rodar qualquer serviço. Isso exigiria pelo menos uma BV2-4-10 e não
-teria redundância. Com DBaaS e Load Balancer, a conta passa do teto.
+teria redundância. Serviços gerenciados (banco, load balancer) compensam em escala maior;
+para um único usuário, somariam custo sem benefício proporcional.
 
 ## Decisão
 

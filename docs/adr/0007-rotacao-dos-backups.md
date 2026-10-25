@@ -11,9 +11,8 @@ sempre. O custo é irrelevante (~12 KB por dia), mas guardar indefinidamente có
 chaves e aparelhos antigos é risco sem benefício.
 
 O caminho usual seria uma regra de **lifecycle** no bucket, aplicada pelo provedor sem
-credenciais extras. Testamos na Magalu Cloud (out/2026): `PutBucketLifecycleConfiguration`
-recusa qualquer regra com `MalformedXML`, inclusive a mais simples (só `Expiration`), e o
-`mgc` (v0.67) não tem comando de lifecycle. **Não há lifecycle disponível.**
+credenciais extras. Quando este ADR foi escrito (out/2026), regras de lifecycle não estavam
+disponíveis para os buckets do projeto, então a rotação precisava ficar do lado do cliente.
 
 ## Decisão
 
@@ -37,5 +36,5 @@ recusa qualquer regra com `MalformedXML`, inclusive a mais simples (só `Expirat
 
 - A chave da VM precisa de permissão de exclusão. O efeito é limitado pelo lock: só
   backups com mais de 30 dias podem ser apagados, e só eles já sairiam pela política.
-- Se a Magalu passar a oferecer lifecycle, este ADR pode ser substituído por uma regra no
-  bucket, e a VM perde a necessidade de apagar.
+- Quando houver lifecycle disponível para o bucket, este ADR pode ser substituído por uma
+  regra no bucket, e a VM perde a necessidade de apagar.

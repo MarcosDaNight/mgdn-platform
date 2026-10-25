@@ -30,6 +30,8 @@ congelado na release [`1.0.0`](https://github.com/MarcosDaNight/blocky-cloud-dns
 - [Orçamento](#orçamento)
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Histórico](#histórico)
+- [Próximos passos](#próximos-passos)
+- [Contribuindo](#contribuindo)
 - [Licença](#licença)
 
 ## Arquitetura
@@ -136,7 +138,7 @@ Por que isso e não ArgoCD: [ADR 0011](docs/adr/0011-gitops-sem-argocd.md).
 | Workflow | Quando | O que faz |
 |---|---|---|
 | `ci` | PR e push | pre-commit, `terraform validate` e `test`, `compose config`, `promtool test rules` |
-| `supply-chain` | PR e push | imagens fixas por digest e Actions por SHA; Trivy barra CRITICAL com correção ([ADR 0008](docs/adr/0008-cadeia-de-suprimentos.md)) |
+| `supply-chain` | PR, push e semanal | Trivy em todas as imagens do Compose: CRITICAL com correção disponível bloqueia ([ADR 0008](docs/adr/0008-cadeia-de-suprimentos.md)) |
 | `terraform-plan` | PR em `infra/` | plano comentado no PR (acima) |
 | `dependabot-auto-merge` | PR do Dependabot | atualizações **patch** entram sozinhas depois do CI verde; minor e major esperam revisão |
 | `dr-drill` | todo dia 2 | restaura o backup num runner descartável e publica RTO e RPO numa issue |
@@ -216,6 +218,12 @@ também é notada.
 | `make plan` / `make apply` | Terraform local (credenciais em `.env`) |
 | `make lint` / `make test-infra` | pre-commit e `terraform test` |
 
+### Adicionar um app
+
+O passo a passo está em [`docs/adicionar-app.md`](docs/adicionar-app.md). Ele cobre o
+Compose, a rota no Traefik com `tailnet-only`, o nome na tailnet pelo Blocky, o backup e
+restore, o monitoramento e a verificação.
+
 ### Mudar a configuração do Blocky
 
 Edite [`deploy/common/blocky/config.yml`](deploy/common/blocky/config.yml) (listas,
@@ -264,7 +272,7 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
 - **Rotação ([ADR 0007](docs/adr/0007-rotacao-dos-backups.md)):**
   - Guarda todos os backups dos últimos 30 dias e o primeiro de cada mês por 12 meses,
     nunca menos de 7 (~43 no total).
-  - Roda na VM, porque a Magalu não oferece lifecycle.
+  - Roda do lado do cliente, na VM, logo depois de cada backup.
   - Simulação: `sudo /opt/mgdn-platform/scripts/prune.sh --dry-run`.
 - **Restore drill:** fora de hora, use *Actions → dr-drill → Run workflow*. Uma falha deixa a
   issue aberta e notifica.
@@ -309,6 +317,9 @@ Todo dia 1º, uma issue lista o que não dá para automatizar:
 | [0010](docs/adr/0010-dominio-proprio-traefik-e-vaultwarden.md) | Domínio próprio, Traefik como borda HTTPS e Vaultwarden só na tailnet |
 | [0011](docs/adr/0011-gitops-sem-argocd.md) | GitOps sem ArgoCD: self-heal, plano no PR e auto-merge de patches |
 
+As fontes por trás de cada decisão (SRE, GitOps, Tailscale, Let's Encrypt etc.) estão em
+[`docs/referencias.md`](docs/referencias.md).
+
 ## Orçamento
 
 | Recurso | Região | R$/mês |
@@ -350,6 +361,8 @@ scripts/
   s3.sh                    cliente S3 mínimo (curl --aws-sigv4)
 docs/adr/                  decisões de arquitetura
 docs/runbooks/             o que fazer quando cada alerta tocar
+docs/adicionar-app.md      passo a passo para um app novo
+docs/referencias.md        fontes por trás das decisões
 .github/workflows/         CI, supply chain, terraform plan, auto-merge, DR drill, checklist
 ```
 
@@ -377,6 +390,25 @@ de aceite verificável. Todas foram concluídas em outubro de 2026.
 | RPO da recriação (do backup ao apply) | **6 min** |
 | DNS fora do ar durante a recriação | **0** (a secundária atendeu a casa e a tailnet) |
 | Aparelhos que precisaram entrar de novo | **0** (mesmas `machine_key` e IPs) |
+
+## Próximos passos
+
+Três apps que cabem na VM principal (~1 GB de RAM livre). Todos seguem o
+[guia de novo app](docs/adicionar-app.md): só pela tailnet, com HTTPS e backup.
+
+- [ ] **Exit node na VM principal.** Não é um app novo, só uma opção do Tailscale
+  ([docs](https://tailscale.com/kb/1103/exit-nodes)). Em Wi-Fi público, todo o tráfego do
+  aparelho sai cifrado pela VM no Brasil. Antes, estime o custo do tráfego de saída.
+- [ ] **ntfy próprio** ([docs](https://ntfy.sh/docs/install/)). Usa ~20 MB e tira os alertas
+  da dependência de um tópico secreto no ntfy.sh público.
+- [ ] **Actual Budget** ([repo](https://github.com/actualbudget/actual)). Finanças pessoais
+  com SQLite e ~100 MB de RAM; o backup entra no mesmo fluxo do Vaultwarden.
+
+## Contribuindo
+
+Issues e PRs são bem-vindos. O fluxo, os checks e as convenções estão em
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Vulnerabilidades devem ser reportadas em privado, por
+*Security → Report a vulnerability*.
 
 ## Licença
 
