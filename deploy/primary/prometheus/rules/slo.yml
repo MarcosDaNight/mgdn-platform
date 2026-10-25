@@ -24,8 +24,9 @@ groups:
       - record: dns:resolver_ok:ratio_rate30d
         expr: avg_over_time(dns:resolver_ok[30d])
 
-  - name: dns-slo-alerts
-    rules:
+      # Alertas no MESMO grupo, depois das gravações: dentro de um grupo o Prometheus
+      # respeita a dependência entre regras. Em grupos separados o alerta às vezes lia a
+      # taxa da avaliação anterior (o teste falhava em ~20% das execuções).
       # Consome 2% do orçamento mensal em 1 h (14,4x).
       - alert: DNSErrorBudgetFastBurn
         expr: |
