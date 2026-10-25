@@ -172,6 +172,7 @@ Os painéis ficam em `make tunnel`, que abre o Grafana em `localhost:3000`.
   | Um resolver fora (perda de redundância) | [dns-resolver-down](docs/runbooks/dns-resolver-down.md) |
   | Alvo sem coleta | [monitoring-target-down](docs/runbooks/monitoring-target-down.md) |
   | GitOps falhando, atrasado, parado ou corrigindo desvio em loop | [gitops](docs/runbooks/gitops.md) |
+  | O healthchecks.io parou de receber o Watchdog (caminho de alertas quebrado) | [watchdog](docs/runbooks/watchdog.md) |
 
 - **Configurar:** instale o app **ntfy**, assine o tópico secreto e coloque
   `https://ntfy.sh/<tópico>?template=alertmanager` em `alert_ntfy_url`. Isso recria a
@@ -179,8 +180,19 @@ Os painéis ficam em `make tunnel`, que abre o Grafana em `localhost:3000`.
 - As regras têm testes em `deploy/primary/prometheus/tests/`. Eles rodam no CI e na VM antes
   de cada deploy.
 
-Além disso, cada VM e o backup pingam checks no healthchecks.io. Assim, uma VM fora do ar
-também é notada.
+### Vigilância por fora da plataforma
+
+O Prometheus e o Alertmanager rodam na principal. Para não depender só deles, quatro checks
+do healthchecks.io avisam por fora, pela integração de ntfy e por e-mail:
+
+| Check | Quem pinga | Pega |
+|---|---|---|
+| **principal** e **secundária** | o `healthcheck.sh` de cada VM, a cada 5 min | VM fora do ar, DNS sem resolver ou sem bloquear, disco cheio |
+| **backup** | o `backup.sh`, de hora em hora | backup parado ou falhando |
+| **watchdog** | o Alertmanager, com o alerta `Watchdog` sempre disparando, a cada 1–2 min | caminho de alertas quebrado com a VM no ar ([ADR 0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md)) |
+
+A URL do watchdog vai em `alert_watchdog_url`. A configuração do check (período, grace e
+canais) e o teste de aceite estão no [runbook](docs/runbooks/watchdog.md).
 
 ## Segurança
 
@@ -319,6 +331,7 @@ Todo dia 1º, uma issue lista o que não dá para automatizar:
 | [0010](docs/adr/0010-dominio-proprio-traefik-e-vaultwarden.md) | Domínio próprio, Traefik como borda HTTPS e Vaultwarden só na tailnet |
 | [0011](docs/adr/0011-gitops-sem-argocd.md) | GitOps sem ArgoCD: self-heal, plano no PR e auto-merge de patches |
 | [0012](docs/adr/0012-actual-budget-e-dados-bancarios.md) | Actual Budget e dados bancários sem Open Finance pago |
+| [0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md) | Dead man's switch do caminho de alertas com o healthchecks.io |
 
 As fontes por trás de cada decisão (SRE, GitOps, Tailscale, Let's Encrypt etc.) estão em
 [`docs/referencias.md`](docs/referencias.md).
@@ -371,8 +384,8 @@ docs/referencias.md        fontes por trás das decisões
 
 ## Histórico
 
-A plataforma foi construída em fases. Cada fase entregou algo utilizável e tinha um critério
-de aceite verificável. Todas foram concluídas em outubro de 2026.
+A plataforma foi construída em fases, a partir de outubro de 2026. Cada fase entregou algo
+utilizável e tem um critério de aceite verificável.
 
 | Fase | Entrega | Aceite medido |
 |---|---|---|
@@ -383,6 +396,7 @@ de aceite verificável. Todas foram concluídas em outubro de 2026.
 | 4. Engenharia | IP real dos clientes no Blocky, checklist mensal, supply chain, SLO e alertas, `terraform test` (com teste de mutação) | — |
 | 5. Apps pessoais | domínio `mgdn.com.br` como código, Traefik, Vaultwarden só na tailnet, migração dos aparelhos sem novo registro | Vaultwarden responde 403 fora da tailnet |
 | Finalização | self-heal e métricas do GitOps, plano no PR, auto-merge de patches ([ADR 0011](docs/adr/0011-gitops-sem-argocd.md)) | um container parado à mão voltou sozinho no sync seguinte |
+| Dead man's switch | alerta Watchdog → healthchecks.io, avisando por fora da plataforma ([ADR 0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md)) | *a medir:* Alertmanager parado → aviso no celular, procedimento no [runbook](docs/runbooks/watchdog.md#teste-de-aceite) |
 
 **Medições de DR:**
 

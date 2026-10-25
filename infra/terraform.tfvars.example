@@ -4,6 +4,7 @@ home_ddns_host = "minha-casa.ddns.net"
 # extra_allowed_cidrs = ["198.51.100.7/32"]
 # healthcheck_url           = "https://hc-ping.com/<uuid-principal>"
 # alert_ntfy_url            = "https://ntfy.sh/<tópico-aleatório>?template=alertmanager"
+# alert_watchdog_url        = "https://hc-ping.com/<uuid-watchdog>"   # dead man's switch (ADR 0013)
 # secondary_healthcheck_url = "https://hc-ping.com/<uuid-secundaria>"
 # secondary_tailnet_authkey = "hskey-auth-..."   # make tailnet-key, antes de criar a VM
 # ssh_break_glass     = true   # só se a tailnet estiver fora

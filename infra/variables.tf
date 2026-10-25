@@ -81,6 +81,13 @@ variable "alert_ntfy_url" {
   sensitive   = true
 }
 
+variable "alert_watchdog_url" {
+  description = "URL de ping do check do healthchecks.io que recebe o alerta Watchdog do Alertmanager a cada minuto (dead man's switch, ADR 0013). Ex.: https://hc-ping.com/<uuid-watchdog>. Vazio desativa."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "secondary_healthcheck_url" {
   description = "URL de ping do healthchecks.io da VM secundária (check próprio, ADR 0005). Vazio desativa."
   type        = string

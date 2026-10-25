@@ -6,9 +6,22 @@ route:
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
+  routes:
+    # Dead man's switch (ADR 0013): o Watchdog vai só para o healthchecks.io, a cada
+    # minuto, e nunca chega ao celular (sem `continue`, a rota padrão não o recebe).
+    - receiver: healthchecks
+      matchers: ['alertname="Watchdog"']
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
 
 receivers:
   - name: ntfy
     webhook_configs:
       - url_file: /etc/alertmanager/secrets/ntfy-url
         send_resolved: true
+  # URL de ping do check (secreta), gerada pelo gitops-sync a partir de ALERT_WATCHDOG_URL.
+  - name: healthchecks
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/watchdog-url
+        send_resolved: false

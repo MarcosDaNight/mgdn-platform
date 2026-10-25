@@ -153,3 +153,19 @@ run "token_da_cloudflare_so_na_principal" {
     error_message = "A secundária não pode receber o token da Cloudflare."
   }
 }
+
+run "watchdog_so_na_principal" {
+  command = plan
+  variables {
+    alert_watchdog_url = "https://hc-ping.com/watchdog-de-teste"
+  }
+
+  assert {
+    condition     = strcontains(module.primary.cloud_init, "ALERT_WATCHDOG_URL=https://hc-ping.com/watchdog-de-teste")
+    error_message = "O Alertmanager da principal precisa da URL do Watchdog (ADR 0013)."
+  }
+  assert {
+    condition     = !strcontains(module.secondary.cloud_init, "ALERT_WATCHDOG_URL")
+    error_message = "A secundária não roda Alertmanager e não pode receber a URL do Watchdog."
+  }
+}
