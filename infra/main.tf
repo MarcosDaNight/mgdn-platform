@@ -39,6 +39,7 @@ module "primary" {
   repo_branch  = var.repo_branch
   env = merge(local.common_env, local.backup_env, {
     ALERT_NTFY_URL       = var.alert_ntfy_url
+    ALERT_WATCHDOG_URL   = var.alert_watchdog_url
     CLOUDFLARE_DNS_TOKEN = var.cloudflare_api_token
   })
 
