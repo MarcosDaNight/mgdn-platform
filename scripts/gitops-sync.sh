@@ -4,6 +4,9 @@
 # /etc/mgdn-platform/env) e aplica deploy/<ROLE>/compose.yaml. Fluxo:
 #   fetch -> há commit novo? -> valida (compose, blocky, prometheus, headscale)
 #   -> aplica -> verifica se o DNS responde -> se não, volta ao último commit bom.
+# Sem commit novo, faz self-heal: `compose up -d` (idempotente) recria o que tiver
+# sido parado ou removido fora do Git. Toda execução publica métricas para o
+# Prometheus (textfile collector do node-exporter).
 #
 # Uso: gitops-sync.sh [--force]   (--force reaplica mesmo sem commit novo)
 #
@@ -15,7 +18,7 @@ main() {
 
   # shellcheck source=/dev/null
   source /etc/mgdn-platform/env
-  local state_dir=/var/lib/mgdn-platform
+  local state_dir=$STATE_DIR
   local force="${1:-}"
   mkdir -p "$state_dir"
   cd "$REPO_DIR"
@@ -24,6 +27,9 @@ main() {
   exec 9>/run/mgdn-platform-gitops.lock
   flock -w 900 9
 
+  # Métricas em toda saída, inclusive nas falhas (set -e).
+  trap 'write_metrics $?' EXIT
+
   git fetch --quiet origin "$REPO_BRANCH"
   local target applied failed
   target=$(git rev-parse "origin/$REPO_BRANCH")
@@ -31,9 +37,13 @@ main() {
   failed=$(cat "$state_dir/failed" 2>/dev/null || true)
 
   if [[ "$force" != "--force" ]]; then
-    [[ "$target" == "$applied" ]] && exit 0
+    if [[ "$target" == "$applied" ]]; then
+      self_heal
+      exit 0
+    fi
     if [[ "$target" == "$failed" ]]; then
       log "commit ${target:0:7} já falhou antes; aguardando um novo commit"
+      self_heal
       exit 0
     fi
   fi
@@ -70,6 +80,54 @@ main() {
 }
 
 REPO_DIR=/opt/mgdn-platform
+STATE_DIR=/var/lib/mgdn-platform
+METRICS_DIR=$STATE_DIR/metrics
+
+# self_heal: reaplica o estado do commit atual. Sem mudanças no Git, `compose up -d`
+# não faz nada; se um container foi parado ou removido à mão, ele volta.
+self_heal() {
+  local out changed
+  if ! out=$(compose up -d --remove-orphans 2>&1); then
+    log "AVISO: self-heal falhou: $(tail -1 <<<"$out")"
+    return 1
+  fi
+  changed=$(grep -cE ' (Started|Recreated|Created)$' <<<"$out" || true)
+  if ((changed > 0)); then
+    log "self-heal: $changed container(s) recolocado(s) no estado do Git"
+    echo $(($(cat "$STATE_DIR/drift_total" 2>/dev/null || echo 0) + changed)) >"$STATE_DIR/drift_total"
+  fi
+}
+
+# write_metrics <código de saída>: gravação atômica lida pelo node-exporter.
+write_metrics() {
+  local rc=$1 now applied target
+  now=$(date +%s)
+  mkdir -p "$METRICS_DIR"
+  [[ "$rc" -ne 0 ]] || echo "$now" >"$STATE_DIR/last_success"
+  applied=$(cat "$STATE_DIR/applied" 2>/dev/null || echo none)
+  target=$(git -C "$REPO_DIR" rev-parse "origin/$REPO_BRANCH" 2>/dev/null || echo unknown)
+  cat >"$METRICS_DIR/.mgdn_gitops.prom" <<METRICS
+# HELP mgdn_gitops_last_run_timestamp_seconds Fim da última execução do GitOps sync.
+# TYPE mgdn_gitops_last_run_timestamp_seconds gauge
+mgdn_gitops_last_run_timestamp_seconds $now
+# HELP mgdn_gitops_last_success_timestamp_seconds Fim da última execução bem-sucedida.
+# TYPE mgdn_gitops_last_success_timestamp_seconds gauge
+mgdn_gitops_last_success_timestamp_seconds $(cat "$STATE_DIR/last_success" 2>/dev/null || echo 0)
+# HELP mgdn_gitops_last_result 1 se a última execução terminou bem, 0 se falhou.
+# TYPE mgdn_gitops_last_result gauge
+mgdn_gitops_last_result $([[ "$rc" -eq 0 ]] && echo 1 || echo 0)
+# HELP mgdn_gitops_behind 1 se a branch tem um commit que não está aplicado.
+# TYPE mgdn_gitops_behind gauge
+mgdn_gitops_behind $([[ "$applied" == "$target" ]] && echo 0 || echo 1)
+# HELP mgdn_gitops_drift_corrections_total Containers recolocados no estado do Git pelo self-heal.
+# TYPE mgdn_gitops_drift_corrections_total counter
+mgdn_gitops_drift_corrections_total $(cat "$STATE_DIR/drift_total" 2>/dev/null || echo 0)
+# HELP mgdn_gitops_applied_info Commit aplicado neste host.
+# TYPE mgdn_gitops_applied_info gauge
+mgdn_gitops_applied_info{commit="${applied:0:7}"} 1
+METRICS
+  mv "$METRICS_DIR/.mgdn_gitops.prom" "$METRICS_DIR/mgdn_gitops.prom"
+}
 
 log() { echo "[gitops] $*"; }
 
@@ -93,7 +151,7 @@ validate() {
     compose run --rm --no-deps -T --entrypoint promtool prometheus \
       check config /etc/prometheus/prometheus.yml >/dev/null || return 1
     compose run --rm --no-deps -T --entrypoint promtool -w /etc/prometheus/tests prometheus \
-      test rules slo_test.yml >/dev/null || return 1
+      test rules slo_test.yml gitops_test.yml >/dev/null || return 1
   fi
   if has_service alertmanager; then
     compose run --rm --no-deps -T --entrypoint amtool alertmanager \

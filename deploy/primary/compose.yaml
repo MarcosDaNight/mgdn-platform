@@ -103,6 +103,8 @@ services:
     restart: unless-stopped
     command:
       - --path.rootfs=/host
+      # Métricas do GitOps sync (scripts/gitops-sync.sh).
+      - --collector.textfile.directory=/host/var/lib/mgdn-platform/metrics
     pid: host
     volumes:
       - /:/host:ro,rslave

@@ -1,0 +1,43 @@
+# Saúde do GitOps sync (scripts/gitops-sync.sh), lida do textfile collector do
+# node-exporter de cada host (label host).
+groups:
+  - name: gitops
+    rules:
+      - alert: GitOpsFailing
+        expr: mgdn_gitops_last_result == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GitOps falhando em {{ $labels.host }} há 10 min"
+          description: "As últimas execuções do sync terminaram com erro (fetch, validação ou deploy)."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/gitops.md
+
+      - alert: GitOpsBehind
+        expr: mgdn_gitops_behind == 1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.host }} não aplicou o último commit da main há 30 min"
+          description: "Provavelmente a validação recusou o commit ou houve rollback."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/gitops.md
+
+      - alert: GitOpsStale
+        expr: time() - mgdn_gitops_last_run_timestamp_seconds > 900
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GitOps não roda em {{ $labels.host }} há mais de 15 min"
+          description: "O timer parou (ex.: esquecido depois de um make headscale-drain) ou o script trava."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/gitops.md
+
+      - alert: GitOpsSelfHealFlapping
+        expr: increase(mgdn_gitops_drift_corrections_total[1h]) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "Self-heal recolocou {{ $value | humanize }} container(s) em 1 h em {{ $labels.host }}"
+          description: "Algo está parando containers repetidamente (crash fora do restart policy ou intervenção manual)."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/gitops.md
