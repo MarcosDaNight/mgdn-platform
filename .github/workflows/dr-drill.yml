@@ -40,7 +40,10 @@ jobs:
           t0=$(date +%s)
           data="$RUNNER_TEMP/headscale"
           vwdata="$RUNNER_TEMP/vaultwarden"
-          restored=$(scripts/restore.sh --target "$data" --vw-target "$vwdata" | sed -n 's/^restored=//p')
+          acmedata="$RUNNER_TEMP/traefik"
+          restored=$(scripts/restore.sh --target "$data" --vw-target "$vwdata" --acme-target "$acmedata" | sed -n 's/^restored=//p')
+          certs=0
+          [[ ! -s "$acmedata/acme.json" ]] || certs=$(jq '[.[].Certificates // [] | length] | add' "$acmedata/acme.json")
 
           # Mesma config de produção, mas local: HTTP em 8080 e sem ACME.
           sed -e 's#^server_url: .*#server_url: http://127.0.0.1:8080#' \
@@ -87,6 +90,7 @@ jobs:
             echo "rpo_h=$(( (t1 - backup_epoch) / 3600 ))"
             echo "nodes=$nodes"
             echo "vaultwarden=$vw"
+            echo "certs=$certs"
             echo "backups=$count (mais antigo: ${oldest_d} dias)"
           } >>"$GITHUB_OUTPUT"
 
@@ -101,6 +105,7 @@ jobs:
           NODES: ${{ steps.drill.outputs.nodes }}
           BACKUPS: ${{ steps.drill.outputs.backups }}
           VAULTWARDEN: ${{ steps.drill.outputs.vaultwarden }}
+          CERTS: ${{ steps.drill.outputs.certs }}
         run: |
           month=$(TZ=America/Sao_Paulo date +%Y-%m)
           if [[ "$OUTCOME" == "success" ]]; then
@@ -108,8 +113,8 @@ jobs:
           else
             title="DR drill $month: FALHOU"
           fi
-          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale e Vaultwarden respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n| Vaultwarden | %s |\n| Backups no bucket | %s |\n| Execução | %s |\n' \
-            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" "${VAULTWARDEN:-—}" "${BACKUPS:-—}" \
+          body=$(printf '| | |\n|---|---|\n| Resultado | %s |\n| Backup restaurado | `%s` |\n| RTO (download → decifrar → Headscale e Vaultwarden respondendo) | %s s |\n| RPO (idade do backup) | %s h |\n| Nós no banco | %s |\n| Vaultwarden | %s |\n| Certificados do Traefik | %s |\n| Backups no bucket | %s |\n| Execução | %s |\n' \
+            "$OUTCOME" "${RESTORED:-—}" "${RTO:-—}" "${RPO:-—}" "${NODES:-—}" "${VAULTWARDEN:-—}" "${CERTS:-—}" "${BACKUPS:-—}" \
             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
           echo "$body" >>"$GITHUB_STEP_SUMMARY"
           gh label create dr-drill --color 5319E7 --description "Restore drill mensal" --force >/dev/null
