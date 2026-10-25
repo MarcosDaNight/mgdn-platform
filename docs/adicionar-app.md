@@ -3,9 +3,9 @@
 Este guia mostra como colocar um app novo na VM principal, acessível **só pela tailnet**,
 com HTTPS e backup. Ele segue o mesmo padrão do Vaultwarden
 ([ADR 0010](adr/0010-dominio-proprio-traefik-e-vaultwarden.md)). O exemplo usa o
-[Actual Budget](https://github.com/actualbudget/actual), um dos
-[próximos passos](../README.md#próximos-passos); troque nome, imagem, porta e diretório de
-dados pelos do seu app.
+[Actual Budget](https://github.com/actualbudget/actual), que foi implantado exatamente assim
+([ADR 0012](adr/0012-actual-budget-e-dados-bancarios.md)). O código real está nos arquivos
+citados em cada passo. Troque nome, imagem, porta e diretório de dados pelos do seu app.
 
 ```mermaid
 flowchart LR
@@ -36,7 +36,7 @@ services:
     restart: unless-stopped
     volumes:
       - actual-data:/data
-    mem_limit: 192m
+    mem_limit: 256m
 
 volumes:
   actual-data:

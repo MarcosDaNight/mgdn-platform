@@ -45,7 +45,7 @@ disk=$(df --output=pcent / | tail -1 | tr -dc '0-9')
 
 # Papel primary: Headscale com HTTPS válido (o /etc/hosts aponta o hostname para
 # 127.0.0.1) e o Blocky respondendo no IP da tailnet. "skip" até o host entrar na tailnet.
-headscale="skip" tailnet_dns="skip" vault="skip"
+headscale="skip" tailnet_dns="skip" vault="skip" actual="skip"
 if [[ "${ROLE:-}" == "primary" ]]; then
   curl -fsS -m 10 -o /dev/null "https://${HEADSCALE_HOSTNAME}/health" && headscale=ok || headscale=fail
   ts_ip=$(tailscale ip -4 2>/dev/null || true)
@@ -53,11 +53,12 @@ if [[ "${ROLE:-}" == "primary" ]]; then
     dig +short +time=3 +tries=2 "@$ts_ip" cloudflare.com A | grep -qE '^[0-9.]+$' && tailnet_dns=ok || tailnet_dns=fail
     # Vaultwarden pelo Traefik, com origem na tailnet (o allowlist do Traefik exige).
     curl -fsS -m 10 -o /dev/null --resolve "vault.mgdn.com.br:443:$ts_ip" https://vault.mgdn.com.br/alive && vault=ok || vault=fail
+    curl -fsS -m 10 -o /dev/null --resolve "actual.mgdn.com.br:443:$ts_ip" https://actual.mgdn.com.br/health && actual=ok || actual=fail
   fi
 fi
 
 if [[ "$resolve" =~ ^[0-9.]+$ && "$block" == "0.0.0.0" && "$home" != "0" &&
-  "$headscale" != "fail" && "$tailnet_dns" != "fail" && "$vault" != "fail" ]] && ((disk < disk_max_pct)); then
+  "$headscale" != "fail" && "$tailnet_dns" != "fail" && "$vault" != "fail" && "$actual" != "fail" ]] && ((disk < disk_max_pct)); then
   status=ok
   suffix=""
 else
@@ -65,7 +66,7 @@ else
   suffix="/fail"
 fi
 
-echo "[healthcheck] $status resolve=${resolve:-none} block=${block:-none} home_queries_${idle_window_min}m=${home} disk=${disk}% headscale=${headscale} tailnet_dns=${tailnet_dns} vault=${vault}"
+echo "[healthcheck] $status resolve=${resolve:-none} block=${block:-none} home_queries_${idle_window_min}m=${home} disk=${disk}% headscale=${headscale} tailnet_dns=${tailnet_dns} vault=${vault} actual=${actual}"
 ((disk >= disk_max_pct)) && echo "[healthcheck] disco em ${disk}% — veja 'docker system df' e 'du -xh / | sort -h | tail'"
 [[ "$home" == "0" ]] && echo "[healthcheck] nenhuma consulta da rede de casa em ${idle_window_min} min — DDNS do roteador desatualizado? veja 'make allowlist'"
 

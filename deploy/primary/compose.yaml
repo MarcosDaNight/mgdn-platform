@@ -45,6 +45,18 @@ services:
       - vaultwarden-data:/data
     mem_limit: 128m
 
+  # Finanças pessoais (ADR 0012), só pela tailnet. A senha do servidor é definida
+  # no primeiro acesso; os dados ficam no volume e entram no backup horário.
+  actual:
+    image: actualbudget/actual-server:26.10.0-alpine@sha256:67b1b5e9584e3e143b4f5c41e52b4506ed9cdd1072392d5ab5369f2d4fd0bffd
+    restart: unless-stopped
+    environment:
+      ACTUAL_LOGIN_METHOD: password
+      ACTUAL_ALLOWED_LOGIN_METHODS: password
+    volumes:
+      - actual-data:/data
+    mem_limit: 256m
+
   blocky:
     image: spx01/blocky:v0.35.0@sha256:4f165b63db0d76c96ecc47c7a8f57caeedc003a912bdce29abb0e283ce02e16b
     restart: unless-stopped
@@ -141,6 +153,7 @@ services:
 volumes:
   traefik-acme:
   vaultwarden-data:
+  actual-data:
   headscale-data:
   headscale-run:
   blocky-cache:

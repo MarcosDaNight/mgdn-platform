@@ -79,6 +79,7 @@ flowchart LR
 | **Headscale** | principal | servidor de controle da tailnet; o Blocky é o DNS dela ([ADR 0003](docs/adr/0003-tailnet-com-headscale.md)) |
 | **Traefik** | principal | borda HTTPS com certificados por DNS-01, sem socket do Docker |
 | **Vaultwarden** | principal | cofre de senhas em `vault.mgdn.com.br`, só pela tailnet |
+| **Actual Budget** | principal | finanças pessoais em `actual.mgdn.com.br`, só pela tailnet ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)) |
 | **Prometheus, Alertmanager, Grafana, blackbox** | principal | métricas, SLO, alertas no celular (ntfy) e dashboards |
 | **node-exporter** | as duas VMs | métricas do host e do GitOps |
 | **Object Storage** | br-se1 | backups cifrados com object lock de 30 dias |
@@ -261,6 +262,7 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
 - **O que é salvo, de hora em hora:**
   - banco e chave Noise do Headscale;
   - o cofre do Vaultwarden;
+  - os orçamentos e a conta do Actual Budget;
   - os certificados do Traefik;
   - o estado do Tailscale da VM principal.
 - **Recriar a VM principal:** **antes do `make apply`, rode `make headscale-drain`.**
@@ -316,6 +318,7 @@ Todo dia 1º, uma issue lista o que não dá para automatizar:
 | [0009](docs/adr/0009-slo-e-alertas.md) | SLO do DNS com orçamento de erro e alertas no celular |
 | [0010](docs/adr/0010-dominio-proprio-traefik-e-vaultwarden.md) | Domínio próprio, Traefik como borda HTTPS e Vaultwarden só na tailnet |
 | [0011](docs/adr/0011-gitops-sem-argocd.md) | GitOps sem ArgoCD: self-heal, plano no PR e auto-merge de patches |
+| [0012](docs/adr/0012-actual-budget-e-dados-bancarios.md) | Actual Budget e dados bancários sem Open Finance pago |
 
 As fontes por trás de cada decisão (SRE, GitOps, Tailscale, Let's Encrypt etc.) estão em
 [`docs/referencias.md`](docs/referencias.md).
@@ -393,16 +396,19 @@ de aceite verificável. Todas foram concluídas em outubro de 2026.
 
 ## Próximos passos
 
-Três apps que cabem na VM principal (~1 GB de RAM livre). Todos seguem o
-[guia de novo app](docs/adicionar-app.md): só pela tailnet, com HTTPS e backup.
+Apps novos seguem o [guia de novo app](docs/adicionar-app.md): só pela tailnet, com HTTPS e
+backup.
 
 - [ ] **Exit node na VM principal.** Não é um app novo, só uma opção do Tailscale
   ([docs](https://tailscale.com/kb/1103/exit-nodes)). Em Wi-Fi público, todo o tráfego do
   aparelho sai cifrado pela VM no Brasil. Antes, estime o custo do tráfego de saída.
 - [ ] **ntfy próprio** ([docs](https://ntfy.sh/docs/install/)). Usa ~20 MB e tira os alertas
   da dependência de um tópico secreto no ntfy.sh público.
-- [ ] **Actual Budget** ([repo](https://github.com/actualbudget/actual)). Finanças pessoais
-  com SQLite e ~100 MB de RAM; o backup entra no mesmo fluxo do Vaultwarden.
+- [ ] **Tema do Actual Budget com a identidade da plataforma**, depois da 26.11.0: CSS com
+  `#13284B` e `#1C9E8C` (claro) e `#E6EDF3` e `#2BC4AC` (escuro).
+- [ ] **Talvez: importador de OFX para o Actual Budget**, num repositório separado. Só se a
+  importação manual incomodar depois de um mês de uso
+  ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)).
 
 ## Contribuindo
 

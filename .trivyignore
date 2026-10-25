@@ -1,0 +1,8 @@
+# Exceções ao gate do Trivy (ADR 0008). Cada uma tem motivo, escopo e data para expirar
+# (exp:): depois dela, a CVE volta a barrar o CI e força a atualização.
+
+# proxy-addr 2.0.7 na imagem do Actual Budget 26.10.0 (corrigido na 2.0.8, já na master do
+# Actual; sai na 26.11.0). A falha permite falsificar o IP de origem pelo X-Forwarded-For.
+# Risco baixo aqui: o Actual só é alcançável pela tailnet, através do Traefik, que não
+# confia em X-Forwarded-For vindo do cliente. Remover ao subir para a 26.11.0 (PR #33).
+CVE-2026-90711 exp:2026-11-15
