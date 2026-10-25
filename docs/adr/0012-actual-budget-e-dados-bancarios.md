@@ -71,6 +71,11 @@ O ponto difícil é a origem dos dados:
 - **A senha do servidor é definida no primeiro acesso.** Até lá, qualquer aparelho da
   tailnet poderia defini-la; hoje todos os aparelhos são do dono. Defina a senha logo depois
   do deploy.
+- **Entra com uma exceção temporária no Trivy.** A 26.10.0 traz o `proxy-addr` 2.0.7
+  (CVE-2026-90711, falsificação de IP pelo `X-Forwarded-For`), corrigido na 2.0.8, que sai na
+  26.11.0. A exceção fica em `.trivyignore`, com motivo e expiração em 2026-11-15; depois
+  dessa data, o CI volta a barrar e força a atualização. O risco é baixo: o app só abre pela
+  tailnet, através do Traefik, que não confia no `X-Forwarded-For` enviado pelo cliente.
 - `mem_limit` de 256 MB. O healthcheck da principal passa a conferir o Actual pelo Traefik,
   como já faz com o Vaultwarden.
 - A camada 1 não é automática: depende de exportar os arquivos no app de cada banco. É o

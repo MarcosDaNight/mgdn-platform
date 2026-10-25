@@ -39,6 +39,9 @@ jobs:
       matrix:
         image: ${{ fromJSON(needs.images.outputs.list) }}
     steps:
+      # Só para ler o .trivyignore (exceções com prazo, ADR 0008).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Nome seguro para arquivos
         id: name
         run: echo "slug=$(echo '${{ matrix.image }}' | sed 's/@.*//; s#[/:]#-#g')" >>"$GITHUB_OUTPUT"
@@ -70,6 +73,7 @@ jobs:
           exit-code: "1"
           format: table
           skip-setup-trivy: true
+          trivyignores: .trivyignore
 
   # Nome estável para a regra de proteção da main (os jobs da matriz mudam de
   # nome a cada versão de imagem).
