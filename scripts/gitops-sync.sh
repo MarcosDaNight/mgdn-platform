@@ -151,7 +151,7 @@ validate() {
     compose run --rm --no-deps -T --entrypoint promtool prometheus \
       check config /etc/prometheus/prometheus.yml >/dev/null || return 1
     compose run --rm --no-deps -T --entrypoint promtool -w /etc/prometheus/tests prometheus \
-      test rules slo_test.yml gitops_test.yml watchdog_test.yml >/dev/null || return 1
+      test rules slo_test.yml gitops_test.yml watchdog_test.yml host_test.yml tailnet_test.yml >/dev/null || return 1
   fi
   if has_service alertmanager; then
     compose run --rm --no-deps -T --entrypoint amtool alertmanager \

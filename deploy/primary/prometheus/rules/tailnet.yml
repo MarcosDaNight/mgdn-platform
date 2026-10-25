@@ -1,0 +1,16 @@
+# Aparelhos da tailnet (métrica escrita pelo healthcheck.sh da principal). Substitui a
+# revisão manual de `make tailnet-nodes` do checklist mensal.
+groups:
+  - name: tailnet
+    rules:
+      # Aparelho sem conexão há 30 dias: provavelmente perdido, trocado ou esquecido.
+      # Métrica escrita pelo healthcheck.sh da principal. Não é urgente, então o
+      # Alertmanager repete só uma vez por semana.
+      - alert: TailnetNodeStale
+        expr: time() - mgdn_tailnet_node_last_seen_timestamp_seconds > 30 * 86400
+        labels:
+          severity: info
+        annotations:
+          summary: "{{ $labels.node }} não aparece na tailnet há {{ $value | humanizeDuration }}"
+          description: "Se o aparelho não é mais usado, remova-o (make tailnet-nodes e headscale nodes delete)."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md

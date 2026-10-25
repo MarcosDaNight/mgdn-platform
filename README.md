@@ -172,6 +172,7 @@ Os painéis ficam em `make tunnel`, que abre o Grafana em `localhost:3000`.
   | Um resolver fora (perda de redundância) | [dns-resolver-down](docs/runbooks/dns-resolver-down.md) |
   | Alvo sem coleta | [monitoring-target-down](docs/runbooks/monitoring-target-down.md) |
   | GitOps falhando, atrasado, parado ou corrigindo desvio em loop | [gitops](docs/runbooks/gitops.md) |
+  | Disco enchendo, RAM baixa, OOM, certificado sem renovar, aparelho sumido da tailnet há 30 dias | [host](docs/runbooks/host.md) |
   | O healthchecks.io parou de receber o Watchdog (caminho de alertas quebrado) | [watchdog](docs/runbooks/watchdog.md) |
 
 - **Configurar:** instale o app **ntfy**, assine o tópico secreto e coloque

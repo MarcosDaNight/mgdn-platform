@@ -16,6 +16,33 @@ idle_window_min=30
 # Acima disso o disco de 10 GB está perto de encher (limites e limpeza devem manter < 75%).
 disk_max_pct=85
 querylog_dir=/var/lib/docker/volumes/mgdn_blocky-logs/_data
+metrics_dir=/var/lib/mgdn-platform/metrics
+
+# Última vez que cada aparelho apareceu na tailnet, para o alerta TailnetNodeStale.
+# Aparelho online conta como visto agora. Gravação atômica lida pelo node-exporter.
+tailnet_metrics() {
+  local container
+  container=$(docker ps -q --filter label=com.docker.compose.service=headscale)
+  [[ -n "$container" ]] || return 0
+  mkdir -p "$metrics_dir"
+  docker exec "$container" headscale nodes list -o json | python3 -c '
+import json, sys, time
+from datetime import datetime
+now = time.time()
+print("# HELP mgdn_tailnet_node_last_seen_timestamp_seconds Última vez que o aparelho apareceu na tailnet.")
+print("# TYPE mgdn_tailnet_node_last_seen_timestamp_seconds gauge")
+for n in json.load(sys.stdin) or []:
+    seen = n.get("last_seen") or {}
+    if isinstance(seen, dict):
+        ts = float(seen.get("seconds", 0))
+    else:
+        ts = datetime.fromisoformat(seen.replace("Z", "+00:00")).timestamp()
+    if n.get("online"):
+        ts = now
+    user = (n.get("user") or {}).get("name", "")
+    print("mgdn_tailnet_node_last_seen_timestamp_seconds{node=\"%s\",user=\"%s\"} %d" % (n["given_name"], user, ts))
+' >"$metrics_dir/.mgdn_tailnet.prom" && mv "$metrics_dir/.mgdn_tailnet.prom" "$metrics_dir/mgdn_tailnet.prom"
+}
 
 resolve=$(dig +short +time=3 +tries=2 @127.0.0.1 cloudflare.com A | head -1)
 block=$(dig +short +time=3 +tries=2 @127.0.0.1 pagead2.googlesyndication.com A | head -1)
@@ -47,6 +74,7 @@ disk=$(df --output=pcent / | tail -1 | tr -dc '0-9')
 # 127.0.0.1) e o Blocky respondendo no IP da tailnet. "skip" até o host entrar na tailnet.
 headscale="skip" tailnet_dns="skip" vault="skip" actual="skip"
 if [[ "${ROLE:-}" == "primary" ]]; then
+  tailnet_metrics || echo "[healthcheck] AVISO: métricas da tailnet não foram atualizadas"
   curl -fsS -m 10 -o /dev/null "https://${HEADSCALE_HOSTNAME}/health" && headscale=ok || headscale=fail
   ts_ip=$(tailscale ip -4 2>/dev/null || true)
   if [[ -n "$ts_ip" ]]; then

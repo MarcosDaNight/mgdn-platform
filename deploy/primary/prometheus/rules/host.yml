@@ -1,0 +1,56 @@
+# Saúde dos hosts (node-exporter de cada VM, label host) e dos certificados do
+# Traefik. Substituem as conferências manuais de RAM e disco do checklist mensal.
+groups:
+  - name: host
+    rules:
+      - alert: HostDiskFilling
+        expr: |
+          1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} > 0.80
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disco de {{ $labels.host }} em {{ $value | humanizePercentage }}"
+          description: "O disco de 10 GB passou de 80%. A 85% o healthcheck externo também falha."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+      - alert: HostDiskWillFill
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{mountpoint="/"}[6h], 24 * 3600) < 0
+          and node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.40
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disco de {{ $labels.host }} enche em menos de 24 h no ritmo atual"
+          description: "Tendência das últimas 6 h. Algo está escrevendo sem parar (logs, imagens, cache)."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes < 100 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.host }} com {{ $value | humanize1024 }}B de RAM disponível"
+          description: "Menos de 100 MB disponíveis há 10 min: o próximo pico vira swap pesado ou OOM."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+      - alert: HostOOMKill
+        expr: increase(node_vmstat_oom_kill[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "OOM killer agiu em {{ $labels.host }}"
+          description: "Um processo foi morto por falta de memória, em geral um container no teto do mem_limit."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+      - alert: TLSCertExpiringSoon
+        expr: min by (cn) (traefik_tls_certs_not_after) - time() < 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Certificado {{ $labels.cn }} vence em {{ $value | humanizeDuration }}"
+          description: "O Traefik renova com 30 dias de folga; faltar menos de 14 significa que a renovação por DNS-01 está falhando."
+          runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
