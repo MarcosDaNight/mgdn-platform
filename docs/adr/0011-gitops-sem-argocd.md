@@ -52,3 +52,9 @@ Manter o `gitops-sync` e completar as lacunas com o que já existe:
 - Mudanças de patch entram em produção sem revisão humana. Rede de segurança: CI completo,
   Trivy, validação e rollback na VM, alertas de SLO e de GitOps.
 - Sem a interface web do Argo: o estado aparece no Grafana e nos logs (`make status`).
+
+## Atualização (2026-10-25)
+
+O auto-merge passou a incluir as atualizações **minor de imagens de container**. Os alertas
+de host e o healthcheck externo dos apps cobrem o que o rollback por DNS não cobre. Minor de
+Actions e de providers do Terraform e todo major continuam com revisão.

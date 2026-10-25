@@ -78,3 +78,5 @@ jobs:
       - run: pipx run pre-commit run --all-files --show-diff-on-failure
       - name: política de retenção dos backups (autoteste)
         run: python3 scripts/retention.py --self-test
+      - name: prazos (.github/deadlines.yml)
+        run: python3 scripts/deadlines.py --check
