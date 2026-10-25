@@ -43,3 +43,12 @@ uma.
   pelo TLS; o `vault` é resolvido pelo Blocky, não pelo DNS público. O token expira em
   25/10/2027 e está no checklist.
 - Custo: o domínio (~R$ 40/ano). A Cloudflare free e os certificados são gratuitos.
+
+## Resultado da migração (25/10/2026)
+
+Os 4 nós foram migrados com `tailscale up --force-reauth --login-server
+https://headscale.mgdn.com.br`. O Headscale reconheceu cada aparelho pela chave da máquina:
+mesmos IDs e IPs, só a chave do nó renovada. Testado primeiro na secundária. A rota do
+DuckDNS e o emissor TLS-ALPN saíram do Traefik. O hostname do Headscale passou para
+`deploy/common/platform.env` (GitOps), e a variável `headscale_hostname` do Terraform ficou
+legada até a próxima recriação planejada das VMs.

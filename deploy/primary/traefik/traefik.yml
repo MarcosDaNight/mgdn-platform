@@ -27,11 +27,6 @@ certificatesResolvers:
       dnsChallenge:
         provider: cloudflare
         resolvers: ["1.1.1.1:53", "9.9.9.9:53"]
-  # Nome antigo do DuckDNS (transição): TLS-ALPN-01 na própria 443.
-  alpn:
-    acme:
-      storage: /letsencrypt/acme.json
-      tlsChallenge: {}
 
 metrics:
   prometheus:
