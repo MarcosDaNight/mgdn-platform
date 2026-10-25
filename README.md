@@ -309,6 +309,38 @@ Se a tailnet estiver fora:
 2. Acesse com `make ssh HOST=<IP público>`.
 3. Desligue a opção depois.
 
+### DDNS de casa pela Cloudflare (opcional)
+
+O allowlist da porta 53 segue o IP de casa por um hostname DDNS (`HOME_DDNS_HOST`). No
+No-IP gratuito, esse hostname expira se não for confirmado a cada 30 dias. A alternativa é
+um registro em `mgdn.com.br`, atualizado de casa pela API da Cloudflare, que não expira.
+
+- **Contrapartida:** o IP de casa passa a ficar ligado ao seu domínio no DNS público. Use um
+  nome difícil de adivinhar; o No-IP também publica o IP, só que sob um domínio genérico.
+- **Requisito:** um computador Linux sempre ligado em casa. O roteador não serve, porque em
+  geral só fala com o No-IP e o DynDNS.
+
+Para trocar:
+
+1. Crie na Cloudflare um token **novo** com `DNS:Edit` só em `mgdn.com.br` (não reaproveite o
+   do Terraform).
+2. No computador de casa, clone o repositório em `~/mgdn-platform` e crie
+   `~/.config/mgdn-platform/home-ddns.env` (0600) com `CF_API_TOKEN`, `CF_ZONE_ID` e
+   `DDNS_NAME`. O formato está no topo de [`scripts/home-ddns.sh`](scripts/home-ddns.sh).
+3. Rode `scripts/home-ddns.sh` uma vez e confira com `dig +short <DDNS_NAME>`.
+4. Ative o timer:
+
+   ```bash
+   cp deploy/home/mgdn-home-ddns.* ~/.config/systemd/user/
+   systemctl --user enable --now mgdn-home-ddns.timer
+   loginctl enable-linger "$USER"   # roda mesmo sem sessão aberta
+   ```
+
+5. Troque `HOME_DDNS_HOST` nos segredos das duas VMs pelo `DDNS_NAME` e abra um PR. As VMs
+   passam a seguir o nome novo em até ~2 min.
+6. Confira com `make allowlist`. Depois, apague o hostname no No-IP e tire o item dele do
+   checklist mensal.
+
 ### Checklist mensal
 
 Todo dia 1º, uma issue lista o que não dá para automatizar:

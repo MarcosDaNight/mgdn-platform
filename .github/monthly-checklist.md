@@ -1,7 +1,7 @@
 Checklist mensal de manutenção do mgdn-platform. Marque os itens e feche a issue quando terminar.
 
 ### DDNS e acesso de casa
-- [ ] **No-IP:** confirmar o hostname (e-mail *"Confirm your hostname"* ou <https://my.noip.com>). No plano gratuito, ele expira se não for confirmado a cada 30 dias.
+- [ ] **No-IP** (até trocar pelo DDNS da Cloudflare, no README): confirmar o hostname (e-mail *"Confirm your hostname"* ou <https://my.noip.com>). No plano gratuito, ele expira se não for confirmado a cada 30 dias.
 - [ ] `make allowlist`: o IP liberado é igual ao IP atual de casa (`curl -s https://1.1.1.1/cdn-cgi/trace | grep ip=`).
 
 ### Saúde

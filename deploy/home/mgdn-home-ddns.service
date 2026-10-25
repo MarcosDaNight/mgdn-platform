@@ -1,0 +1,10 @@
+# Unit de usuário para um computador sempre ligado em casa (não roda nas VMs).
+# Instalação: veja "DDNS de casa pela Cloudflare" no README.
+[Unit]
+Description=mgdn-platform: atualiza o IP de casa na Cloudflare
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/mgdn-platform/scripts/home-ddns.sh
