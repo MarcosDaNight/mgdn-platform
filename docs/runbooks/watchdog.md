@@ -32,9 +32,8 @@ sudo grep -c 'watchdog-desativado' /etc/mgdn-platform/alertmanager/watchdog-url 
 
 - Container parado ou em crash: `docker compose restart alertmanager` (ou `prometheus`). O
   self-heal do GitOps também o recoloca em até ~2 min, desde que o timer esteja ativo.
-- URL vazia ou errada: corrija `alert_watchdog_url` no `terraform.tfvars`. O valor chega
-  pelo cloud-init, então mudar **recria a VM principal**: `make headscale-drain` e depois
-  `make apply`.
+- URL vazia ou errada: `make secrets-set ROLE=primary KEY=ALERT_WATCHDOG_URL` e um PR com
+  o `secrets/primary.env.age` (ADR 0014). A VM aplica em até ~2 min, sem recriação.
 - **Manutenção planejada**, como recriar a VM: pause o check no healthchecks.io (*Pause*)
   antes do `make headscale-drain`. Ele volta sozinho no primeiro ping.
 
@@ -55,10 +54,10 @@ ADR 0013.
      integração. Prioridade alta para *down* e normal para *up*.
    - **E-mail** (segundo canal): cobre o caso de o ntfy.sh estar fora, que derrubaria o
      ntfy dos alertas e o deste aviso ao mesmo tempo.
-4. Copie a **Ping URL** para `alert_watchdog_url` no `terraform.tfvars`. Essa URL é
-   segredo: com ela, qualquer um pinga o check e esconde uma falha real. No próximo
-   `make apply`, que recria a principal (`make headscale-drain` antes), o Watchdog começa a
-   pingar.
+4. Grave a **Ping URL** com `make secrets-set ROLE=primary KEY=ALERT_WATCHDOG_URL` (o
+   valor é pedido sem eco) e abra um PR com o `secrets/primary.env.age`. Essa URL é segredo:
+   com ela, qualquer um pinga o check e esconde uma falha real. Depois do merge, o Watchdog
+   começa a pingar em até ~2 min.
 
 ## Teste de aceite
 

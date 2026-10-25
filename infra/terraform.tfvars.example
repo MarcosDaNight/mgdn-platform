@@ -1,10 +1,9 @@
-# Copie para terraform.tfvars (gitignored).
-home_ddns_host = "minha-casa.ddns.net"
+# Copie para terraform.tfvars (gitignored). Segredos da plataforma (URLs de ping,
+# tópico do ntfy, credenciais do backup, IP de casa) NÃO vão aqui: ficam cifrados em
+# secrets/<papel>.env.age (ADR 0014, `make secrets-edit ROLE=primary`).
+# As chaves age dos hosts (host_age_keys) vêm de ~/.config/mgdn-platform/age/ pelo
+# Makefile; não precisam ser copiadas para cá.
 
-# extra_allowed_cidrs = ["198.51.100.7/32"]
-# healthcheck_url           = "https://hc-ping.com/<uuid-principal>"
-# alert_ntfy_url            = "https://ntfy.sh/<tópico-aleatório>?template=alertmanager"
-# alert_watchdog_url        = "https://hc-ping.com/<uuid-watchdog>"   # dead man's switch (ADR 0013)
-# secondary_healthcheck_url = "https://hc-ping.com/<uuid-secundaria>"
-# secondary_tailnet_authkey = "hskey-auth-..."   # make tailnet-key, antes de criar a VM
-# ssh_break_glass     = true   # só se a tailnet estiver fora
+cloudflare_api_token = "..." # Zone:Read e DNS:Edit só em mgdn.com.br (ADR 0010)
+
+# ssh_break_glass = true   # só se a tailnet estiver fora

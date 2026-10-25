@@ -65,8 +65,9 @@ docker compose run --rm --no-deps -T --entrypoint promtool -w /etc/prometheus/te
 - **Nada é publicado na internet além das portas 53 e 443.** UIs ficam em `127.0.0.1` ou
   atrás do Traefik com o middleware `tailnet-only`.
 - **Nenhum segredo ou dado pessoal no Git**: tokens, IP de casa, hostname do DDNS, URLs de
-  healthcheck ou tópicos do ntfy. Segredos chegam às VMs pelo `terraform.tfvars`, que fica
-  fora do Git, e o gitleaks barra os vazamentos mais comuns.
+  healthcheck ou tópicos do ntfy **em claro**. Segredos ficam cifrados em
+  `secrets/<papel>.env.age` (`make secrets-edit`, ADR 0014), e o gitleaks barra os vazamentos
+  mais comuns.
 - **Alerta novo vem com teste e runbook**: um teste em `deploy/primary/prometheus/tests/` e
   um runbook em `docs/runbooks/`, referenciado em `runbook_url`.
 - **Documentação em português**, com frases diretas. O README descreve o estado atual; o

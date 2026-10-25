@@ -6,25 +6,12 @@ locals {
   ssh_port = var.ssh_break_glass ? {
     ssh = { protocol = "tcp", port = 22, description = "SSH break-glass (origem filtrada no host)" }
   } : {}
-
-  # Backup imutável em br-se1, longe da principal (ADR 0006).
-  backup_env = var.backup == null ? {} : {
-    BACKUP_ENDPOINT        = "https://br-se1.magaluobjects.com"
-    BACKUP_REGION          = "br-se1"
-    BACKUP_BUCKET          = "mgdn-platform-backup-b29a4ccd"
-    BACKUP_ACCESS_KEY      = var.backup.access_key
-    BACKUP_SECRET_KEY      = var.backup.secret_key
-    BACKUP_AGE_IDENTITY    = var.backup.age_identity
-    BACKUP_HEALTHCHECK_URL = var.backup.healthcheck_url
-  }
-
-  common_env = {
-    HEALTHCHECK_URL     = var.healthcheck_url
-    HOME_DDNS_HOST      = var.home_ddns_host
-    EXTRA_ALLOWED_CIDRS = join(",", var.extra_allowed_cidrs)
-    HEADSCALE_HOSTNAME  = var.headscale_hostname
-  }
 }
+
+# Segredos (tokens, URLs de ping, credenciais do backup, IP de casa) não passam
+# por aqui: ficam cifrados em secrets/<papel>.env.age e chegam pelo GitOps (ADR 0014).
+# O cloud-init leva só a chave age de cada host, então trocar um segredo não recria
+# a VM.
 
 module "primary" {
   source    = "./modules/host"
@@ -37,22 +24,15 @@ module "primary" {
   ssh_key_name = var.ssh_key_name
   repo_url     = var.repo_url
   repo_branch  = var.repo_branch
-  env = merge(local.common_env, local.backup_env, {
-    ALERT_NTFY_URL       = var.alert_ntfy_url
-    ALERT_WATCHDOG_URL   = var.alert_watchdog_url
-    CLOUDFLARE_DNS_TOKEN = var.cloudflare_api_token
-  })
+  age_key      = lookup(var.host_age_keys, "primary", "")
 
   # Certificados por DNS-01/TLS-ALPN no Traefik: a porta 80 não é mais necessária.
   public_ports = merge(local.dns_ports, local.ssh_port, {
     https = { protocol = "tcp", port = 443, description = "Traefik: Headscale (autenticado) e apps da tailnet" }
   })
 
-  # Backup e restore do Headscale (ADR 0006).
-  extra_packages = ["age", "sqlite3"]
-
-  # O próprio host fala com o Headscale local sem depender de hairpin NAT.
-  etc_hosts = { (var.headscale_hostname) = "127.0.0.1" }
+  # Backup e restore dos SQLite (ADR 0006).
+  extra_packages = ["sqlite3"]
 }
 
 module "secondary" {
@@ -66,10 +46,7 @@ module "secondary" {
   ssh_key_name = var.ssh_key_name
   repo_url     = var.repo_url
   repo_branch  = var.repo_branch
-  env = merge(local.common_env, {
-    HEALTHCHECK_URL = var.secondary_healthcheck_url
-    TAILNET_AUTHKEY = var.secondary_tailnet_authkey
-  })
+  age_key      = lookup(var.host_age_keys, "secondary", "")
 
   public_ports = merge(local.dns_ports, local.ssh_port)
 }

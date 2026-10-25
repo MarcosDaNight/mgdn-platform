@@ -5,8 +5,12 @@ TF      ?= terraform
 TFDIR   := infra
 ENV     := set -a && source ./.env && set +a &&
 ENV_ABS := set -a && source ../.env && set +a &&
+# Chaves age dos hosts (ADR 0014), lidas de ~/.config/mgdn-platform/age/. Sem elas o
+# plano recriaria as VMs sem acesso aos segredos, então o comando falha antes.
+TFKEYS  := k=$$(../scripts/secrets.sh host-keys) && export TF_VAR_host_age_keys="$$k" &&
 # Acesso pela tailnet (MagicDNS): mgdn-primary ou mgdn-secondary. Sem tailnet:
 # HOST=<IP público> com ssh_break_glass = true no terraform.tfvars.
+ROLE    ?= primary
 HOST    ?= mgdn-primary
 SSH      = ssh -o StrictHostKeyChecking=accept-new ubuntu@$(HOST)
 # O papel vem do hostname (mgdn-primary -> primary): o /etc/mgdn-platform/env é 0600.
@@ -28,17 +32,40 @@ init: ## terraform init
 	@cd $(TFDIR) && $(ENV_ABS) $(TF) init -input=false
 
 plan: ## terraform plan
-	@cd $(TFDIR) && $(ENV_ABS) $(TF) plan
+	@cd $(TFDIR) && $(ENV_ABS) $(TFKEYS) $(TF) plan
 
-apply: ## terraform apply
-	@cd $(TFDIR) && $(ENV_ABS) $(TF) apply
+apply: ## terraform apply seguro: mostra o plano e, se a principal for recriada, faz o drain antes
+	@cd $(TFDIR) && $(ENV_ABS) $(TFKEYS) TF=$(TF) ../scripts/tf-apply.sh
 
 destroy: ## Destroi tudo, inclusive o IP público (o roteador de casa precisaria ser reconfigurado)
-	@cd $(TFDIR) && $(ENV_ABS) $(TF) destroy
+	@cd $(TFDIR) && $(ENV_ABS) $(TFKEYS) $(TF) destroy
+
+# --- Segredos (ADR 0014) --------------------------------------------------------
+
+.PHONY: secrets-edit secrets-set secrets-keys secrets-bootstrap secrets-capture-identity
+secrets-edit: ## Edita os segredos de um papel no editor (ROLE=primary|secondary) e recifra
+	@scripts/secrets.sh edit $(ROLE)
+
+secrets-set: ## Grava um segredo sem ecoar (ROLE=... KEY=ALERT_WATCHDOG_URL; valor pedido no terminal)
+	@test -n "$(KEY)" || { echo "uso: make secrets-set ROLE=primary KEY=<CHAVE>"; exit 1; }
+	@scripts/secrets.sh set $(ROLE) $(KEY)
+
+secrets-keys: ## Lista as chaves (sem valores) dos segredos de um papel (ROLE=...)
+	@scripts/secrets.sh keys $(ROLE)
+
+secrets-bootstrap: ## Instala a chave age nas VMs já existentes (uma vez; VMs novas recebem pelo cloud-init)
+	@for r in primary secondary; do \
+	  ssh -o StrictHostKeyChecking=accept-new ubuntu@mgdn-$$r 'sudo install -m 0600 /dev/stdin /etc/mgdn-platform/age.key' < $$HOME/.config/mgdn-platform/age/$$r.key && \
+	  echo "mgdn-$$r: chave instalada"; \
+	done
+	@echo "No próximo commit, o GitOps passa a ler os segredos do repositório (make sync para já)."
+
+secrets-capture-identity: ## Guarda a identidade da secundária na tailnet nos segredos (recriada, volta com o mesmo IP)
+	@ssh ubuntu@mgdn-secondary 'sudo base64 -w0 /var/lib/tailscale/tailscaled.state' | scripts/secrets.sh set secondary TAILSCALED_STATE_B64
 
 # --- Tailnet --------------------------------------------------------------------
 
-.PHONY: tailnet-nodes tailnet-register tailnet-key headscale-drain
+.PHONY: tailnet-nodes tailnet-register tailnet-key headscale-drain headscale-undrain
 tailnet-nodes: ## Lista os aparelhos da tailnet
 	@$(SSH) '$(HS) nodes list'
 
@@ -52,7 +79,11 @@ tailnet-key: ## Chave de uso único (30 min) para `tailscale up --authkey` em Li
 
 headscale-drain: ## Antes de recriar a VM principal: pausa o GitOps, backup novo e Headscale parado de forma limpa
 	@$(SSH) 'sudo systemctl stop mgdn-gitops.timer && sudo systemctl start mgdn-backup.service && sudo journalctl -u mgdn-backup -n 1 -o cat --no-pager && $(COMPOSE) stop headscale'
-	@echo "Headscale parado: os clientes reconectam assim que a VM nova subir. Agora: make apply"
+	@echo "Headscale parado: os clientes reconectam assim que a VM nova subir."
+
+headscale-undrain: ## Desfaz o drain (apply cancelado ou falhou): Headscale e GitOps de volta
+	@$(SSH) '$(COMPOSE) start headscale && sudo systemctl start mgdn-gitops.timer'
+	@echo "Headscale e GitOps de volta."
 
 # --- Operação -------------------------------------------------------------------
 
@@ -93,7 +124,7 @@ backup: ## Faz um backup do Headscale agora
 	@$(SSH) 'sudo systemctl start mgdn-backup.service; sudo journalctl -u mgdn-backup -n 3 -o cat --no-pager'
 
 backups: ## Lista os backups mais recentes no bucket imutável (N=10)
-	@$(SSH) 'sudo bash -c ". /etc/mgdn-platform/env; . /opt/mgdn-platform/scripts/s3.sh; s3_list headscale/ | tail -n $(or $(N),10)"'
+	@$(SSH) 'sudo bash -c ". /etc/mgdn-platform/env; [ ! -f /etc/mgdn-platform/secrets.env ] || . /etc/mgdn-platform/secrets.env; . /opt/mgdn-platform/scripts/s3.sh; s3_list headscale/ | tail -n $(or $(N),10)"'
 
 test: ## Testa resolução e bloqueio nas duas VMs (IPs públicos, de casa) e pela tailnet
 	@cd $(TFDIR) && $(ENV_ABS) p=$$($(TF) output -raw primary_ip) && s2=$$($(TF) output -raw secondary_ip 2>/dev/null); \

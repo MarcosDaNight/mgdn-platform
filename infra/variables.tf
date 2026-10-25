@@ -22,44 +22,12 @@ variable "ssh_key_name" {
   default     = "mgdn-key"
 }
 
-variable "home_ddns_host" {
-  description = "Hostname DDNS mantido pelo roteador de casa; só esse IP (e os extras) alcança o DNS público (53)."
-  type        = string
 
-  validation {
-    condition     = can(regex("^[a-z0-9.-]+\\.[a-z]{2,}$", var.home_ddns_host))
-    error_message = "home_ddns_host deve ser um hostname (ex.: minha-casa.ddns.net)."
-  }
-}
-
-variable "extra_allowed_cidrs" {
-  description = "CIDRs IPv4 fixos liberados além do IP de casa (ex.: break-glass)."
-  type        = list(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for c in var.extra_allowed_cidrs : can(cidrhost(c, 0))])
-    error_message = "extra_allowed_cidrs deve conter CIDRs IPv4 (ex.: 198.51.100.7/32)."
-  }
-}
-
-variable "headscale_hostname" {
-  description = "LEGADO: só lido na criação da VM. O valor efetivo vem de deploy/common/platform.env (GitOps, ADR 0010). Remover na próxima recriação planejada das VMs."
-  type        = string
-  default     = "mgdn-platform.duckdns.org"
-}
 
 variable "ssh_break_glass" {
   description = "Abre a porta 22 no security group (ainda filtrada pelo allowlist do host). Use só se a tailnet estiver fora."
   type        = bool
   default     = false
-}
-
-variable "healthcheck_url" {
-  description = "URL de ping do healthchecks.io da VM principal. Vazio desativa."
-  type        = string
-  default     = ""
-  sensitive   = true
 }
 
 variable "repo_url" {
@@ -74,42 +42,14 @@ variable "repo_branch" {
   default     = "main"
 }
 
-variable "alert_ntfy_url" {
-  description = "URL do tópico ntfy que recebe os alertas do Alertmanager (ex.: https://ntfy.sh/<tópico-aleatório>?template=alertmanager). Vazio desativa (ADR 0009)."
-  type        = string
-  default     = ""
+variable "host_age_keys" {
+  description = "Chave privada age de cada host (primary, secondary), uma linha AGE-SECRET-KEY-1... Decifra secrets/<papel>.env.age na VM (ADR 0014). Só é lida na criação da VM."
+  type        = map(string)
+  default     = {}
   sensitive   = true
-}
 
-variable "alert_watchdog_url" {
-  description = "URL de ping do check do healthchecks.io que recebe o alerta Watchdog do Alertmanager a cada minuto (dead man's switch, ADR 0013). Ex.: https://hc-ping.com/<uuid-watchdog>. Vazio desativa."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "secondary_healthcheck_url" {
-  description = "URL de ping do healthchecks.io da VM secundária (check próprio, ADR 0005). Vazio desativa."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "secondary_tailnet_authkey" {
-  description = "Chave de uso único (make tailnet-key) para a secundária entrar na tailnet no primeiro boot. Só é lida na criação da VM."
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "backup" {
-  description = "Backup do Headscale (ADR 0006): credenciais da chave mgdn-backup (object-storage read/write), identidade age (linha AGE-SECRET-KEY-...) para o restore automático e URL opcional do healthchecks.io."
-  type = object({
-    access_key      = string
-    secret_key      = string
-    age_identity    = string
-    healthcheck_url = optional(string, "")
-  })
-  default   = null
-  sensitive = true
+  validation {
+    condition     = alltrue([for k, v in var.host_age_keys : contains(["primary", "secondary"], k) && can(regex("^AGE-SECRET-KEY-1[0-9A-Z]{58}$", v))])
+    error_message = "host_age_keys aceita só primary e secondary, cada uma com uma linha AGE-SECRET-KEY-1..."
+  }
 }

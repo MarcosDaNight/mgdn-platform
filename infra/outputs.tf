@@ -5,7 +5,7 @@ output "primary_ip" {
 
 output "headscale_url" {
   description = "URL do Headscale para os clientes Tailscale."
-  value       = "https://${var.headscale_hostname}"
+  value       = "https://${cloudflare_dns_record.headscale.name}"
 }
 
 output "secondary_ip" {

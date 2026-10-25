@@ -20,6 +20,8 @@ set -euo pipefail
 
 # shellcheck source=/dev/null
 [[ ! -f /etc/mgdn-platform/env ]] || source /etc/mgdn-platform/env
+# shellcheck source=/dev/null
+[[ ! -f /etc/mgdn-platform/secrets.env ]] || source /etc/mgdn-platform/secrets.env
 here=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=scripts/s3.sh
 source "$here/s3.sh"

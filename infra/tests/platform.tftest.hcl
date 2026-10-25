@@ -38,7 +38,6 @@ variables {
   vpc_ids              = { ne1 = "vpc-ne1", se1 = "vpc-se1" }
   mgc_api_key          = "teste"
   cloudflare_api_token = "teste"
-  home_ddns_host       = "casa.exemplo.net"
 }
 
 run "portas_padrao" {
@@ -66,68 +65,10 @@ run "ssh_so_com_break_glass" {
   }
 }
 
-# Regressão (PR #10): pacotes no cloud-init compartilhado recriariam as duas VMs juntas.
-run "pacotes_extras_so_na_principal" {
-  command = plan
 
-  assert {
-    condition     = strcontains(module.primary.cloud_init, "  - age\n") && strcontains(module.primary.cloud_init, "  - sqlite3\n")
-    error_message = "A principal precisa de age e sqlite3 (backup do Headscale)."
-  }
-  assert {
-    condition     = !strcontains(module.secondary.cloud_init, "  - age\n")
-    error_message = "A secundária não pode receber os pacotes da principal."
-  }
-}
 
-run "credenciais_de_backup_so_na_principal" {
-  command = plan
-  variables {
-    backup = {
-      access_key   = "AK"
-      secret_key   = "SK"
-      age_identity = "AGE-SECRET-KEY-1TESTE"
-    }
-  }
 
-  assert {
-    condition     = strcontains(module.primary.cloud_init, "BACKUP_BUCKET=mgdn-platform-backup-b29a4ccd")
-    error_message = "A principal deve receber a configuração de backup."
-  }
-  assert {
-    condition     = !strcontains(module.secondary.cloud_init, "BACKUP_")
-    error_message = "A secundária não pode receber credenciais de backup."
-  }
-}
 
-run "headscale_resolve_localmente_na_principal" {
-  command = plan
-
-  assert {
-    condition     = strcontains(module.primary.cloud_init, "127.0.0.1 mgdn-platform.duckdns.org")
-    error_message = "A principal deve falar com o Headscale local via /etc/hosts (sem hairpin NAT)."
-  }
-  assert {
-    condition     = !strcontains(module.secondary.cloud_init, "127.0.0.1 mgdn-platform.duckdns.org")
-    error_message = "A secundária precisa alcançar o Headscale pelo IP público."
-  }
-}
-
-run "rejeita_ddns_invalido" {
-  command = plan
-  variables {
-    home_ddns_host = "não é hostname"
-  }
-  expect_failures = [var.home_ddns_host]
-}
-
-run "rejeita_cidr_invalido" {
-  command = plan
-  variables {
-    extra_allowed_cidrs = ["300.1.2.3/32"]
-  }
-  expect_failures = [var.extra_allowed_cidrs]
-}
 
 run "headscale_no_dominio_proprio" {
   command = plan
@@ -138,34 +79,79 @@ run "headscale_no_dominio_proprio" {
   }
 }
 
-run "token_da_cloudflare_so_na_principal" {
+# Regressão (PR #10): pacotes no cloud-init compartilhado recriariam as duas VMs juntas.
+run "pacotes_extras_so_na_principal" {
+  command = plan
+
+  assert {
+    condition     = strcontains(module.primary.cloud_init, "  - sqlite3\n")
+    error_message = "A principal precisa do sqlite3 (backup dos SQLite)."
+  }
+  assert {
+    condition     = !strcontains(module.secondary.cloud_init, "  - sqlite3\n")
+    error_message = "A secundária não pode receber os pacotes da principal."
+  }
+  assert {
+    condition     = strcontains(module.primary.cloud_init, "  - age\n") && strcontains(module.secondary.cloud_init, "  - age\n")
+    error_message = "As duas VMs precisam do age para decifrar os segredos (ADR 0014)."
+  }
+}
+
+# ADR 0014: segredos chegam cifrados pelo GitOps, nunca pelo cloud-init. Trocar um
+# segredo não pode recriar VM.
+run "segredos_fora_do_cloud_init" {
   command = plan
   variables {
     cloudflare_api_token = "token-de-teste"
   }
 
   assert {
-    condition     = strcontains(module.primary.cloud_init, "CLOUDFLARE_DNS_TOKEN=token-de-teste")
-    error_message = "O Traefik da principal precisa do token da Cloudflare (DNS-01)."
-  }
-  assert {
-    condition     = !strcontains(module.secondary.cloud_init, "CLOUDFLARE_DNS_TOKEN")
-    error_message = "A secundária não pode receber o token da Cloudflare."
+    condition = alltrue([for c in [module.primary.cloud_init, module.secondary.cloud_init] :
+    !strcontains(c, "token-de-teste") && !strcontains(c, "BACKUP_") && !strcontains(c, "HEALTHCHECK_URL") && !strcontains(c, "ALERT_") && !strcontains(c, "HOME_DDNS_HOST")])
+    error_message = "Nenhum segredo pode ir no cloud-init: eles ficam em secrets/<papel>.env.age."
   }
 }
 
-run "watchdog_so_na_principal" {
+run "chave_age_de_cada_host" {
   command = plan
   variables {
-    alert_watchdog_url = "https://hc-ping.com/watchdog-de-teste"
+    host_age_keys = {
+      primary   = "AGE-SECRET-KEY-1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      secondary = "AGE-SECRET-KEY-1BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    }
   }
 
   assert {
-    condition     = strcontains(module.primary.cloud_init, "ALERT_WATCHDOG_URL=https://hc-ping.com/watchdog-de-teste")
-    error_message = "O Alertmanager da principal precisa da URL do Watchdog (ADR 0013)."
+    condition     = strcontains(module.primary.cloud_init, "/etc/mgdn-platform/age.key") && strcontains(module.primary.cloud_init, "AGE-SECRET-KEY-1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+    error_message = "A principal deve receber a própria chave age."
   }
   assert {
-    condition     = !strcontains(module.secondary.cloud_init, "ALERT_WATCHDOG_URL")
-    error_message = "A secundária não roda Alertmanager e não pode receber a URL do Watchdog."
+    condition     = !strcontains(module.primary.cloud_init, "AGE-SECRET-KEY-1BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB") && !strcontains(module.secondary.cloud_init, "AGE-SECRET-KEY-1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+    error_message = "Cada host recebe só a própria chave: a secundária não decifra os segredos da principal."
   }
+}
+
+run "sem_chave_age_sem_arquivo" {
+  command = plan
+
+  assert {
+    condition     = !strcontains(module.primary.cloud_init, "age.key") && !strcontains(module.secondary.cloud_init, "age.key")
+    error_message = "Sem host_age_keys, o cloud-init não grava chave."
+  }
+}
+
+run "rejeita_chave_age_invalida" {
+  command = plan
+  variables {
+    host_age_keys = { primary = "não é chave" }
+  }
+  expect_failures = [var.host_age_keys]
+}
+
+run "rejeita_papel_desconhecido" {
+  command = plan
+  variables {
+    host_age_keys = { terceira = "AGE-SECRET-KEY-1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }
+  }
+  expect_failures = [var.host_age_keys]
 }

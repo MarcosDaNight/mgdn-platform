@@ -4,12 +4,17 @@
 #
 # - primary: roda o Headscale, então gera a própria chave. É o primeiro nó
 #   registrado e recebe 100.64.0.1, o DNS da tailnet anunciado pelo Headscale.
-# - demais papéis: usam TAILNET_AUTHKEY (uso único, de `make tailnet-key`),
-#   entregue pelo cloud-init. Depois de registrado, a chave não é mais lida.
+# - demais papéis: restauram a identidade guardada em TAILSCALED_STATE_B64, nos
+#   segredos do repositório (ADR 0014, `make secrets-capture-identity`). A VM
+#   recriada volta como o mesmo nó, com o mesmo IP. Sem ela, usam TAILNET_AUTHKEY
+#   (uso único, de `make tailnet-key`), o que cria um nó novo com outro IP.
 set -euo pipefail
 
 # shellcheck source=/dev/null
 source /etc/mgdn-platform/env
+# Segredos decifrados pelo gitops-sync (ADR 0014); têm precedência sobre o env.
+# shellcheck source=/dev/null
+[[ ! -f /etc/mgdn-platform/secrets.env ]] || source /etc/mgdn-platform/secrets.env
 # shellcheck source=/dev/null
 source /opt/mgdn-platform/deploy/common/platform.env
 user=platform
@@ -70,10 +75,24 @@ if [[ "$ROLE" == "primary" ]]; then
   fi
   key=$(hs preauthkeys create --user "$uid" --expiration 10m -o json |
     python3 -c 'import json,sys; print(json.load(sys.stdin)["key"])')
+elif [[ -n "${TAILSCALED_STATE_B64:-}" ]]; then
+  systemctl stop tailscaled
+  base64 -d <<<"$TAILSCALED_STATE_B64" | install -D -m 0600 /dev/stdin /var/lib/tailscale/tailscaled.state
+  systemctl start tailscaled
+  for _ in $(seq 1 24); do
+    running && {
+      no_snat
+      log "identidade restaurada dos segredos ($(tailscale ip -4))"
+      exit 0
+    }
+    sleep 5
+  done
+  log "identidade restaurada, mas o nó não conectou; confira 'tailscale status'"
+  exit 1
 else
   key="${TAILNET_AUTHKEY:-}"
   if [[ -z "$key" ]]; then
-    log "TAILNET_AUTHKEY vazio; host fora da tailnet (gere com make tailnet-key e recrie a VM)"
+    log "sem identidade nem TAILNET_AUTHKEY; host fora da tailnet (veja 'Recriar a secundária' no README)"
     exit 0
   fi
 fi
