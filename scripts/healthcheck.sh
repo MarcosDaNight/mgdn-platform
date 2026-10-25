@@ -7,6 +7,8 @@ set -uo pipefail
 
 # shellcheck source=/dev/null
 source /etc/mgdn-platform/env
+# shellcheck source=/dev/null
+source /opt/mgdn-platform/deploy/common/platform.env
 
 # Silêncio da rede de casa por mais que isso = casa sem acesso ao DNS (ex.: o IP
 # de casa mudou e o firewall barrou). Uma casa típica faz milhares de consultas/dia.

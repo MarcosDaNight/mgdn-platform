@@ -129,6 +129,13 @@ apply() {
   systemctl enable --quiet mgdn-allowlist.service
   systemctl enable --quiet --now mgdn-gitops.timer mgdn-healthcheck.timer mgdn-allowlist.timer mgdn-maintenance.timer mgdn-backup.timer
 
+  # O host principal fala com o próprio Headscale via 127.0.0.1 (sem hairpin NAT).
+  # shellcheck source=/dev/null
+  source "$REPO_DIR/deploy/common/platform.env"
+  if [[ "$ROLE" == "primary" ]] && ! grep -qxF "127.0.0.1 $HEADSCALE_HOSTNAME" /etc/hosts; then
+    echo "127.0.0.1 $HEADSCALE_HOSTNAME" >>/etc/hosts
+  fi
+
   # Filtro de origem ativo antes de qualquer container publicar a porta 53.
   systemctl start mgdn-allowlist.service
 

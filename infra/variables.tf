@@ -44,7 +44,7 @@ variable "extra_allowed_cidrs" {
 }
 
 variable "headscale_hostname" {
-  description = "Hostname público do Headscale (HTTPS via Let's Encrypt). DuckDNS até a compra do domínio (ADR 0003)."
+  description = "LEGADO: só lido na criação da VM. O valor efetivo vem de deploy/common/platform.env (GitOps, ADR 0010). Remover na próxima recriação planejada das VMs."
   type        = string
   default     = "mgdn-platform.duckdns.org"
 }
