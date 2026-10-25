@@ -404,10 +404,11 @@ backup.
   aparelho sai cifrado pela VM no Brasil. Antes, estime o custo do tráfego de saída.
 - [ ] **ntfy próprio** ([docs](https://ntfy.sh/docs/install/)). Usa ~20 MB e tira os alertas
   da dependência de um tópico secreto no ntfy.sh público.
-- [ ] **Importador para o Actual Budget**, num repositório separado
-  ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)). Recebe pela tailnet o OFX
-  exportado pelo banco e importa as transações sem duplicar.
-- [ ] **Identidade visual** da plataforma, aplicada ao Actual por tema customizado (CSS).
+- [ ] **Tema do Actual Budget com a identidade da plataforma**, depois da 26.11.0: CSS com
+  `#13284B` e `#1C9E8C` (claro) e `#E6EDF3` e `#2BC4AC` (escuro).
+- [ ] **Talvez: importador de OFX para o Actual Budget**, num repositório separado. Só se a
+  importação manual incomodar depois de um mês de uso
+  ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)).
 
 ## Contribuindo
 

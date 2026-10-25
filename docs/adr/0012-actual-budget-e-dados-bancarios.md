@@ -36,18 +36,22 @@ O ponto difícil é a origem dos dados:
   - backup horário cifrado, restore automático numa VM nova e verificação no DR drill mensal.
 - **Dados bancários em camadas, todas sem custo:**
   1. **Arquivos exportados pelos bancos** (OFX de preferência, CSV quando não houver),
-     importados no Actual. Não envolve terceiros, e o Actual evita duplicatas.
+     importados no Actual. Não envolve terceiros. A importação de OFX deduplica pelo
+     `FITID`, o identificador de cada transação, então reimportar um período não duplica
+     nada. Falta confirmar quais dos bancos em uso exportam OFX.
   2. **Pluggy pelo Meu Pluggy**, opcional e só enquanto for gratuita. Só com conectores
      **Open Finance**: o consentimento é feito no app do banco, só para leitura, com prazo e
      revogável. Conectores que pedem a senha do banco ficam de fora.
-  3. **Importador próprio**, se a camada 1 virar rotina pesada. Ele recebe os arquivos pela
-     tailnet, identifica a conta e chama `importTransactions` da
-     [API do Actual](https://actualbudget.org/docs/api/), que deduplica pelo `imported_id`.
-     O importador vive **num repositório separado**, com CI, testes e imagem própria; aqui
-     entra só o serviço no Compose, com a imagem fixada por digest.
-- **Identidade visual (futuro):** quando a plataforma tiver uma identidade, a interface segue
+  3. **Importador próprio: talvez.** Só vale construir se o fluxo manual da camada 1
+     incomodar depois de um mês de uso, já que a deduplicação já está resolvida. Se vier,
+     ele recebe os arquivos pela tailnet, identifica a conta e chama `importTransactions`
+     da [API do Actual](https://actualbudget.org/docs/api/). Viveria **num repositório
+     separado**, com CI, testes e imagem própria; aqui entraria só o serviço no Compose,
+     com a imagem fixada por digest.
+- **Identidade visual (depois da 26.11.0):** a interface segue a identidade da plataforma
   pelos [temas customizados](https://actualbudget.org/docs/custom-themes) do Actual, que usam
-  variáveis CSS. Um fork do app fica descartado, porque exigiria manter builds próprios a
+  variáveis CSS. As cores são `#13284B` e `#1C9E8C` no tema claro e `#E6EDF3` e `#2BC4AC` no
+  escuro. Um fork do app fica descartado, porque exigiria manter builds próprios a
   cada release.
 
 ## Consequências
@@ -59,7 +63,11 @@ O ponto difícil é a origem dos dados:
     aparelhos. Assim, nem a VM nem o backup guardam os orçamentos em claro.
 
   Os segredos da Pluggy, se usada, ficam no servidor e fora dessa criptografia. Um importador
-  próprio precisaria da chave de ponta a ponta, e isso será decidido no repositório dele.
+  próprio precisaria da chave de ponta a ponta, e isso seria decidido no repositório dele.
+- **Com a criptografia de ponta a ponta ligada, o restore drill prova menos.** Ele prova que
+  os arquivos voltam e que o servidor sobe com eles, mas não que o orçamento abre, porque o
+  drill não tem a senha de criptografia. Essa senha fica no Vaultwarden; sem ela, o backup
+  dos orçamentos é ilegível, inclusive para o dono.
 - **A senha do servidor é definida no primeiro acesso.** Até lá, qualquer aparelho da
   tailnet poderia defini-la; hoje todos os aparelhos são do dono. Defina a senha logo depois
   do deploy.
