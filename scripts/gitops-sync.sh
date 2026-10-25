@@ -151,11 +151,14 @@ validate() {
     compose run --rm --no-deps -T --entrypoint promtool prometheus \
       check config /etc/prometheus/prometheus.yml >/dev/null || return 1
     compose run --rm --no-deps -T --entrypoint promtool -w /etc/prometheus/tests prometheus \
-      test rules slo_test.yml gitops_test.yml >/dev/null || return 1
+      test rules slo_test.yml gitops_test.yml watchdog_test.yml >/dev/null || return 1
   fi
   if has_service alertmanager; then
     compose run --rm --no-deps -T --entrypoint amtool alertmanager \
       check-config /etc/alertmanager/alertmanager.yml >/dev/null || return 1
+    # O Watchdog (ADR 0013) vai só para o healthchecks.io, nunca para o celular.
+    compose run --rm --no-deps -T --entrypoint amtool alertmanager config routes test \
+      --config.file /etc/alertmanager/alertmanager.yml --verify.receivers=healthchecks alertname=Watchdog >/dev/null || return 1
   fi
   if has_service blackbox; then
     compose run --rm --no-deps -T blackbox --config.file=/etc/blackbox/blackbox.yml --config.check >/dev/null 2>&1 || return 1
@@ -205,12 +208,15 @@ apply() {
     printf '%s' "${CLOUDFLARE_DNS_TOKEN:-}" | install -m 0600 /dev/stdin /etc/mgdn-platform/traefik/cf-dns-token
   fi
 
-  # URL secreta do ntfy para o Alertmanager (ADR 0009): arquivo fora do repo,
-  # legível pelo usuário do container (nobody). Sem URL, os alertas não saem.
+  # URLs secretas do Alertmanager, em arquivos fora do repo legíveis pelo usuário do
+  # container (nobody): o tópico do ntfy (ADR 0009) e o ping do Watchdog no
+  # healthchecks.io (ADR 0013). Sem URL, o envio correspondente não sai.
   if has_service alertmanager; then
     install -d -m 0750 -g 65534 /etc/mgdn-platform/alertmanager
     printf '%s\n' "${ALERT_NTFY_URL:-http://127.0.0.1:9/alertas-desativados}" |
       install -m 0640 -g 65534 /dev/stdin /etc/mgdn-platform/alertmanager/ntfy-url
+    printf '%s\n' "${ALERT_WATCHDOG_URL:-http://127.0.0.1:9/watchdog-desativado}" |
+      install -m 0640 -g 65534 /dev/stdin /etc/mgdn-platform/alertmanager/watchdog-url
   fi
 
   # VM nova (primeiro deploy): restaura o Headscale do backup mais recente antes de
