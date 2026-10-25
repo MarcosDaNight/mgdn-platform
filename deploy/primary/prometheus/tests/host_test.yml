@@ -1,0 +1,112 @@
+# Testes das regras de host: `promtool test rules`.
+rule_files:
+  - ../rules/host.yml
+
+evaluation_interval: 1m
+
+tests:
+  # Disco de 10 GB: a principal sobe de 70% para 85% e fica; a secundária fica em 50%.
+  - interval: 5m
+    input_series:
+      - series: 'node_filesystem_size_bytes{host="primary",mountpoint="/"}'
+        values: "10000000000x20"
+      - series: 'node_filesystem_avail_bytes{host="primary",mountpoint="/"}'
+        values: "3000000000x3 1500000000x17"
+      - series: 'node_filesystem_size_bytes{host="secondary",mountpoint="/"}'
+        values: "10000000000x20"
+      - series: 'node_filesystem_avail_bytes{host="secondary",mountpoint="/"}'
+        values: "5000000000x20"
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: HostDiskFilling
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: HostDiskFilling
+        exp_alerts:
+          - exp_labels: {severity: warning, host: primary, mountpoint: /}
+            exp_annotations:
+              summary: "Disco de primary em 85%"
+              description: "O disco de 10 GB passou de 80%. A 85% o healthcheck externo também falha."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+  # Perde 50 MB a cada 5 min a partir de 3 GB livres: enche em ~5 h.
+  - interval: 5m
+    input_series:
+      - series: 'node_filesystem_size_bytes{host="primary",mountpoint="/"}'
+        values: "10000000000x60"
+      - series: 'node_filesystem_avail_bytes{host="primary",mountpoint="/"}'
+        values: "3000000000-50000000x59"
+    alert_rule_test:
+      - eval_time: 4h
+        alertname: HostDiskWillFill
+        exp_alerts:
+          - exp_labels: {severity: warning, host: primary, mountpoint: /}
+            exp_annotations:
+              summary: "Disco de primary enche em menos de 24 h no ritmo atual"
+              description: "Tendência das últimas 6 h. Algo está escrevendo sem parar (logs, imagens, cache)."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+  # Disco estável em 50%: nada.
+  - interval: 5m
+    input_series:
+      - series: 'node_filesystem_size_bytes{host="primary",mountpoint="/"}'
+        values: "10000000000x120"
+      - series: 'node_filesystem_avail_bytes{host="primary",mountpoint="/"}'
+        values: "5000000000x120"
+    alert_rule_test:
+      - eval_time: 8h
+        alertname: HostDiskWillFill
+        exp_alerts: []
+
+  # RAM: 300 MB e depois 80 MB por 15 min na secundária.
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemAvailable_bytes{host="secondary"}'
+        values: "314572800x10 83886080x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HostMemoryLow
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HostMemoryLow
+        exp_alerts:
+          - exp_labels: {severity: warning, host: secondary}
+            exp_annotations:
+              summary: "secondary com 80MiB de RAM disponível"
+              description: "Menos de 100 MB disponíveis há 10 min: o próximo pico vira swap pesado ou OOM."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+  # Um OOM kill aos 10 min.
+  - interval: 1m
+    input_series:
+      - series: 'node_vmstat_oom_kill{host="primary"}'
+        values: "0x10 1x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HostOOMKill
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: HostOOMKill
+        exp_alerts:
+          - exp_labels: {severity: warning, host: primary}
+            exp_annotations:
+              summary: "OOM killer agiu em primary"
+              description: "Um processo foi morto por falta de memória, em geral um container no teto do mem_limit."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+  # Certificado vencendo em 10 dias (não renovou) e outro em 60 dias.
+  - interval: 5m
+    input_series:
+      - series: 'traefik_tls_certs_not_after{cn="vault.mgdn.com.br"}'
+        values: "864000x30"
+      - series: 'traefik_tls_certs_not_after{cn="actual.mgdn.com.br"}'
+        values: "5184000x30"
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: TLSCertExpiringSoon
+        exp_alerts:
+          - exp_labels: {severity: warning, cn: vault.mgdn.com.br}
+            exp_annotations:
+              summary: "Certificado vault.mgdn.com.br vence em 9d 22h 30m 0s"
+              description: "O Traefik renova com 30 dias de folga; faltar menos de 14 significa que a renovação por DNS-01 está falhando."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md

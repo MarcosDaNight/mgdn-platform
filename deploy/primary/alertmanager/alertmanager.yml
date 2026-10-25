@@ -14,6 +14,11 @@ route:
       group_wait: 0s
       group_interval: 1m
       repeat_interval: 1m
+    # Avisos sem urgência (ex.: aparelho sumido da tailnet): celular, uma vez por semana.
+    - receiver: ntfy
+      matchers: ['severity="info"']
+      group_by: [alertname, node]
+      repeat_interval: 168h
 
 receivers:
   - name: ntfy

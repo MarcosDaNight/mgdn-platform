@@ -7,7 +7,6 @@ Checklist mensal de manutenção do mgdn-platform. Marque os itens e feche a iss
 ### Saúde
 - [ ] <https://healthchecks.io>: os quatro checks (**principal**, **secundária**, **backup**, **watchdog**) estão *up*, sem falhas inesperadas no mês.
 - [ ] `make test`: as duas VMs e a tailnet resolvem e bloqueiam.
-- [ ] `make status` e `make status HOST=mgdn-secondary`: RAM disponível > 100 MB, disco < 80%, commit aplicado igual ao último da `main`.
 
 ### Backup e DR
 - [ ] A issue **DR drill** deste mês (aberta no dia 2) está *OK*, com RTO e RPO coerentes.
@@ -17,7 +16,7 @@ Checklist mensal de manutenção do mgdn-platform. Marque os itens e feche a iss
 - [ ] Abrir `https://vault.mgdn.com.br` pela tailnet; a issue do DR drill mostra o cofre restaurado com os itens.
 
 ### Tailnet
-- [ ] `make tailnet-nodes`: só aparelhos conhecidos. Remova os que você não usa mais.
+- [ ] `make tailnet-nodes`: só aparelhos conhecidos. Aparelhos sumidos há 30 dias já viram o alerta `TailnetNodeStale`; aqui é só conferir que nenhum aparelho estranho entrou.
 
 ### Atualizações
 - [ ] Revisar e mergear os PRs abertos do Dependabot. Isso também mantém o repo ativo: o GitHub desativa workflows agendados (como este) depois de 60 dias sem commits.

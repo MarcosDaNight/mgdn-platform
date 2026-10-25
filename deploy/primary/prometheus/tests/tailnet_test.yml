@@ -1,0 +1,27 @@
+# Testes das regras da tailnet: `promtool test rules`. Avaliação de hora em hora: a
+# janela é de semanas.
+rule_files:
+  - ../rules/tailnet.yml
+
+evaluation_interval: 1h
+
+tests:
+  # Aparelho visto pela última vez no instante 0, e um visto agora.
+  - interval: 1d
+    input_series:
+      - series: 'mgdn_tailnet_node_last_seen_timestamp_seconds{node="tablet-velho"}'
+        values: "0x40"
+      - series: 'mgdn_tailnet_node_last_seen_timestamp_seconds{node="iphone"}'
+        values: "0+86400x40"
+    alert_rule_test:
+      - eval_time: 29d
+        alertname: TailnetNodeStale
+        exp_alerts: []
+      - eval_time: 32d
+        alertname: TailnetNodeStale
+        exp_alerts:
+          - exp_labels: {severity: info, node: tablet-velho}
+            exp_annotations:
+              summary: "tablet-velho não aparece na tailnet há 32d 0h 0m 0s"
+              description: "Se o aparelho não é mais usado, remova-o (make tailnet-nodes e headscale nodes delete)."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md

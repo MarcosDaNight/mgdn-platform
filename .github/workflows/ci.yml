@@ -42,9 +42,9 @@ jobs:
       - name: promtool check config
         if: hashFiles(format('deploy/{0}/prometheus/prometheus.yml', matrix.role)) != ''
         run: docker compose run --rm --no-deps -T --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
-      - name: promtool test rules (SLO, GitOps, Watchdog)
+      - name: promtool test rules (SLO, GitOps, Watchdog, host, tailnet)
         if: hashFiles(format('deploy/{0}/prometheus/tests/slo_test.yml', matrix.role)) != ''
-        run: docker compose run --rm --no-deps -T --entrypoint promtool -w /etc/prometheus/tests prometheus test rules slo_test.yml gitops_test.yml watchdog_test.yml
+        run: docker compose run --rm --no-deps -T --entrypoint promtool -w /etc/prometheus/tests prometheus test rules slo_test.yml gitops_test.yml watchdog_test.yml host_test.yml tailnet_test.yml
       - name: amtool check-config
         if: hashFiles(format('deploy/{0}/alertmanager/alertmanager.yml', matrix.role)) != ''
         run: docker compose run --rm --no-deps -T --entrypoint amtool alertmanager check-config /etc/alertmanager/alertmanager.yml
@@ -56,6 +56,7 @@ jobs:
           amtool() { docker compose run --rm --no-deps -T --entrypoint amtool alertmanager config routes test --config.file /etc/alertmanager/alertmanager.yml "$@"; }
           amtool --verify.receivers=healthchecks alertname=Watchdog
           amtool --verify.receivers=ntfy alertname=DNSErrorBudgetFastBurn severity=page
+          amtool --verify.receivers=ntfy alertname=TailnetNodeStale severity=info
           if amtool --verify.receivers=ntfy alertname=Watchdog >/dev/null; then
             echo "::error::o Watchdog chegaria no celular"; exit 1
           fi
