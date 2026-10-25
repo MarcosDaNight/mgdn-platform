@@ -189,7 +189,7 @@ do healthchecks.io avisam por fora, pela integração de ntfy e por e-mail:
 
 | Check | Quem pinga | Pega |
 |---|---|---|
-| **principal** e **secundária** | o `healthcheck.sh` de cada VM, a cada 5 min | VM fora do ar, DNS sem resolver ou sem bloquear, disco cheio |
+| **principal** e **secundária** | o `healthcheck.sh` de cada VM, a cada 5 min | VM fora do ar, DNS sem resolver ou sem bloquear, disco cheio e, na principal, qualquer app com `mgdn.url` fora do ar |
 | **backup** | o `backup.sh`, de hora em hora | backup parado ou falhando |
 | **watchdog** | o Alertmanager, com o alerta `Watchdog` sempre disparando, a cada 1–2 min | caminho de alertas quebrado com a VM no ar ([ADR 0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md)) |
 
@@ -345,12 +345,14 @@ Para trocar:
 
 Todo dia 1º, uma issue lista o que não dá para automatizar:
 
-- o hostname no No-IP;
+- o hostname no No-IP (até a troca pelo DDNS da Cloudflare);
 - os checks do healthchecks.io;
 - a issue do DR drill;
-- os aparelhos da tailnet;
-- os PRs do Dependabot que esperam revisão;
-- os prazos das credenciais.
+- aparelhos estranhos na tailnet (os sumidos há 30 dias já viram alerta);
+- os PRs do Dependabot que esperam revisão (major e minor de Actions e providers).
+
+Disco, RAM e certificados viraram alertas (`docs/runbooks/host.md`), e os prazos das
+credenciais viraram issues automáticas (`.github/deadlines.yml`).
 
 ## Decisões (ADRs)
 
@@ -395,29 +397,36 @@ infra/                     Terraform (state remoto no Object Storage da Magalu)
 deploy/                    o que roda nas VMs (fonte da verdade do GitOps)
   common/blocky/           configuração do Blocky, compartilhada pelos papéis
   common/platform.env      nomes públicos da plataforma (hostname do Headscale)
-  primary/compose.yaml     traefik, headscale, vaultwarden, blocky e monitoramento
+  primary/compose.yaml     traefik, headscale, vaultwarden, actual, blocky e monitoramento;
+                           os labels mgdn.* de cada serviço são o contrato de app (ADR 0015)
   primary/headscale/       configuração do Headscale (DNS da tailnet = Blocky)
   primary/traefik/         borda HTTPS: Headscale e apps da tailnet (certificados por DNS-01)
   primary/backup/          chave pública age que cifra os backups
   primary/blackbox/        sondas DNS (resolve e bloqueia) que alimentam o SLI
-  primary/prometheus/      coleta, regras de SLO/GitOps (rules/) e testes (tests/)
+  primary/prometheus/      coleta, regras de SLO, GitOps, host e tailnet (rules/) e testes (tests/)
   primary/alertmanager/    envio dos alertas ao ntfy
   primary/grafana/         datasource e dashboards provisionados
   secondary/compose.yaml   Blocky e node-exporter (DNS secundário em br-se1)
   systemd/                 timers: gitops, healthcheck, allowlist, backup, limpeza semanal
+  home/                    timer opcional do DDNS de casa (roda em casa, não nas VMs)
 scripts/
   gitops-sync.sh           por papel: validar → aplicar → verificar → rollback; self-heal e métricas
   tailnet-join.sh          registra a VM na tailnet
   allowlist.sh             porta 53 pública só para o IP de casa (DDNS)
-  healthcheck.sh           DNS, bloqueio, tráfego de casa, disco, Headscale, DNS da tailnet
-  backup.sh / restore.sh   backup cifrado e imutável; restore automático no primeiro deploy
+  healthcheck.sh           DNS, bloqueio, tráfego de casa, disco, Headscale, DNS da tailnet, apps
+  apps.py                  lê os labels mgdn.* para backup, restore, healthcheck e DR drill
+  new-app.py               `make new-app`: serviço, rota no Traefik e nome no Blocky
+  backup.sh / restore.sh   backup cifrado e imutável dos volumes marcados; restore no primeiro deploy
   prune.sh / retention.py  rotação: 30 dias de diários + 12 mensais (mín. 7)
   s3.sh                    cliente S3 mínimo (curl --aws-sigv4)
+  deadlines.py             prazos de .github/deadlines.yml (validação e aviso)
+  home-ddns.sh             DDNS de casa pela API da Cloudflare (opcional)
 docs/adr/                  decisões de arquitetura
 docs/runbooks/             o que fazer quando cada alerta tocar
 docs/adicionar-app.md      passo a passo para um app novo
 docs/referencias.md        fontes por trás das decisões
-.github/workflows/         CI, supply chain, terraform plan, auto-merge, DR drill, checklist
+.github/deadlines.yml      vencimentos de chaves, tokens e domínio
+.github/workflows/         CI, supply chain, terraform plan, auto-merge, DR drill, checklist, prazos
 ```
 
 ## Histórico
@@ -435,6 +444,7 @@ utilizável e tem um critério de aceite verificável.
 | 5. Apps pessoais | domínio `mgdn.com.br` como código, Traefik, Vaultwarden só na tailnet, migração dos aparelhos sem novo registro | Vaultwarden responde 403 fora da tailnet |
 | Finalização | self-heal e métricas do GitOps, plano no PR, auto-merge de patches ([ADR 0011](docs/adr/0011-gitops-sem-argocd.md)) | um container parado à mão voltou sozinho no sync seguinte |
 | Dead man's switch | alerta Watchdog → healthchecks.io, avisando por fora da plataforma ([ADR 0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md)) | *a medir:* Alertmanager parado → aviso no celular, procedimento no [runbook](docs/runbooks/watchdog.md#teste-de-aceite) |
+| Menos processos manuais | alertas de host e de aparelhos sumidos, prazos como código, auto-merge de minor das imagens, contrato de app por labels e `make new-app` ([ADR 0015](docs/adr/0015-contrato-de-app-por-labels.md)) | DR drill com backup e restore guiados pelos labels: Vaultwarden (110 itens) e Actual (1 orçamento) de pé, RTO 25 s ([issue #39](https://github.com/MarcosDaNight/mgdn-platform/issues/39)) |
 
 **Medições de DR:**
 
