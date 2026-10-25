@@ -219,10 +219,12 @@ apply() {
       install -m 0640 -g 65534 /dev/stdin /etc/mgdn-platform/alertmanager/watchdog-url
   fi
 
-  # VM nova (primeiro deploy): restaura o Headscale do backup mais recente antes de
-  # subi-lo, para os aparelhos seguirem na tailnet sem novo registro (ADR 0006).
+  # VM nova (primeiro deploy): restaura os apps com dados (label mgdn.backup.volume,
+  # ADR 0015) do backup mais recente antes de subi-los. O Headscale volta com os
+  # aparelhos, que seguem na tailnet sem novo registro (ADR 0006).
   if [[ -z "$from" ]] && has_service headscale && [[ -n "${BACKUP_BUCKET:-}" ]]; then
-    compose create headscale vaultwarden actual traefik >/dev/null
+    # shellcheck disable=SC2046
+    compose create $(python3 "$REPO_DIR/scripts/apps.py" --compose "$REPO_DIR/deploy/$ROLE/compose.yaml" backup | cut -f1) >/dev/null
     "$REPO_DIR/scripts/restore.sh" --if-empty --with-tailscale >/dev/null || log "AVISO: restore do Headscale falhou; subindo com estado vazio"
   fi
 

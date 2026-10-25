@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Backup do Headscale (ADR 0006), do Vaultwarden (ADR 0010) e do Actual Budget
-# (ADR 0012): snapshots
-# consistentes dos SQLite, chave Noise, cache ACME, dados do Vaultwarden e o estado
-# do cliente Tailscale desta VM, cifrados com a chave
-# pública age do repositório e enviados ao bucket imutável (object lock) em br-se1.
-# Executado pelo mgdn-backup.timer.
+# Backup da VM principal (ADR 0006): os volumes de todo serviço com o label
+# mgdn.backup.volume (ADR 0015: Headscale, Traefik, Vaultwarden, Actual...), com
+# snapshots consistentes dos SQLite, mais o estado do cliente Tailscale desta VM.
+# Cifrado com a chave pública age do repositório e enviado ao bucket imutável
+# (object lock) em br-se1. Executado pelo mgdn-backup.timer.
 #
 # Sem a chave Noise, todos os aparelhos teriam de entrar de novo na tailnet. Sem o
 # tailscaled.state, a VM recriada viraria um nó novo e perderia o 100.64.0.1
@@ -27,57 +26,47 @@ fi
 ping_hc() { [[ -z "${BACKUP_HEALTHCHECK_URL:-}" ]] || curl -fsS -m 10 --retry 3 -o /dev/null "${BACKUP_HEALTHCHECK_URL}$1" || true; }
 trap 'ping_hc /fail' ERR
 
-vol=/var/lib/docker/volumes/mgdn_headscale-data/_data
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-mkdir "$work/headscale"
+dirs=()
 
-# API de backup online do SQLite: consistente mesmo com o Headscale gravando (WAL).
-sqlite3 "$vol/db.sqlite" ".backup '$work/headscale/db.sqlite'"
-[[ "$(sqlite3 "$work/headscale/db.sqlite" 'PRAGMA integrity_check;')" == "ok" ]]
-cp "$vol/noise_private.key" "$work/headscale/"
-[[ ! -d "$vol/cache" ]] || cp -r "$vol/cache" "$work/headscale/"
-dirs=(headscale)
-
-# Vaultwarden (ADR 0010): banco, chaves RSA dos tokens, anexos e sends.
-vw=/var/lib/docker/volumes/mgdn_vaultwarden-data/_data
-if [[ -f "$vw/db.sqlite3" ]]; then
-  mkdir "$work/vaultwarden"
-  sqlite3 "$vw/db.sqlite3" ".backup '$work/vaultwarden/db.sqlite3'"
-  [[ "$(sqlite3 "$work/vaultwarden/db.sqlite3" 'PRAGMA integrity_check;')" == "ok" ]]
-  for f in rsa_key.pem rsa_key.pub.pem config.json; do
-    [[ ! -f "$vw/$f" ]] || cp "$vw/$f" "$work/vaultwarden/"
+# snapshot <origem> <destino> <exclusões>: cópia do volume em que cada SQLite é trocado
+# por um snapshot consistente pela API de backup online (o app pode estar gravando).
+snapshot() {
+  local src=$1 dst=$2 exclude=$3 ex f rel
+  cp -a "$src" "$dst"
+  IFS=, read -ra ex <<<"$exclude"
+  for f in "${ex[@]}"; do
+    [[ -z "$f" ]] || rm -rf "${dst:?}/$f"
   done
-  for d in attachments sends; do
-    [[ ! -d "$vw/$d" ]] || cp -r "$vw/$d" "$work/vaultwarden/"
-  done
-  dirs+=(vaultwarden)
-fi
-
-# Actual Budget (ADR 0012): contas e senha do servidor (server-files) e orçamentos
-# (user-files). Cópia do diretório inteiro; cada SQLite é trocado por um snapshot
-# consistente, já que o app pode estar gravando.
-ab=/var/lib/docker/volumes/mgdn_actual-data/_data
-if [[ -f "$ab/server-files/account.sqlite" ]]; then
-  cp -a "$ab" "$work/actual"
-  while IFS= read -r -d '' db; do
-    rel=${db#"$ab"/}
+  while IFS= read -r -d '' f; do
+    [[ "$(head -c 15 "$f" | tr -d '\0')" == "SQLite format 3" ]] || continue
+    rel=${f#"$dst"/}
     # O snapshot já inclui o WAL; uma cópia velha dele ao lado corromperia o restore.
-    rm -f "$work/actual/$rel-wal" "$work/actual/$rel-shm"
-    sqlite3 "$db" ".backup '$work/actual/$rel'"
-    [[ "$(sqlite3 "$work/actual/$rel" 'PRAGMA integrity_check;')" == "ok" ]]
-  done < <(find "$ab" -name '*.sqlite' -print0)
-  dirs+=(actual)
-fi
+    rm -f "$f-wal" "$f-shm" "$f-journal"
+    sqlite3 "$src/$rel" ".backup '$f'"
+    [[ "$(sqlite3 "$f" 'PRAGMA integrity_check;')" == "ok" ]]
+  done < <(find "$dst" -type f ! -name '*-wal' ! -name '*-shm' ! -name '*-journal' -print0)
+}
 
-# Certificados do Traefik: uma VM recriada volta com eles, sem servir o certificado
-# padrão enquanto reemite e sem gastar o limite semanal do Let's Encrypt.
-acme=/var/lib/docker/volumes/mgdn_traefik-acme/_data/acme.json
-if [[ -s "$acme" ]]; then
-  mkdir "$work/traefik"
-  cp "$acme" "$work/traefik/"
-  dirs+=(traefik)
-fi
+# Apps com dados (ADR 0015): todo serviço com o label mgdn.backup.volume entra, sem
+# bloco próprio aqui. Cada um vira um diretório com o nome do serviço no arquivo.
+while IFS=$'\t' read -r svc vol _mount ready exclude; do
+  src=/var/lib/docker/volumes/$vol/_data
+  if [[ -n "$ready" && ! -e "$src/$ready" ]] || [[ -z "$(ls -A "$src" 2>/dev/null)" ]]; then
+    log "$svc: ainda sem dados, fora deste backup"
+    continue
+  fi
+  snapshot "$src" "$work/$svc" "$exclude"
+  dirs+=("$svc")
+done < <(python3 "$repo/scripts/apps.py" --compose "$repo/deploy/primary/compose.yaml" backup)
+[[ " ${dirs[*]} " == *" headscale "* ]] || {
+  log "ERRO: o Headscale não entrou no backup"
+  exit 1
+}
+
+# Estado do cliente Tailscale desta VM (fora dos volumes): sem ele, a VM recriada
+# viraria um nó novo e perderia o 100.64.0.1.
 if [[ -f /var/lib/tailscale/tailscaled.state ]]; then
   mkdir "$work/tailscale"
   cp /var/lib/tailscale/tailscaled.state "$work/tailscale/"

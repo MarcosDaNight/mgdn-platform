@@ -12,6 +12,10 @@ services:
       - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
       - headscale-data:/var/lib/headscale
       - headscale-run:/var/run/headscale
+    labels:
+      # Contrato de app (ADR 0015): lido pelo backup, restore, healthcheck e DR drill.
+      mgdn.backup.volume: headscale-data
+      mgdn.backup.ready: db.sqlite
     mem_limit: 128m
 
   traefik:
@@ -27,6 +31,10 @@ services:
       - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
       - /etc/mgdn-platform/traefik:/run/secrets:ro
       - traefik-acme:/letsencrypt
+    labels:
+      # Certificados: uma VM recriada volta com eles, sem gastar o limite do Let's Encrypt.
+      mgdn.backup.volume: traefik-acme
+      mgdn.backup.ready: acme.json
     mem_limit: 128m
 
   vaultwarden:
@@ -43,6 +51,14 @@ services:
       LOG_LEVEL: warn
     volumes:
       - vaultwarden-data:/data
+    labels:
+      mgdn.url: https://vault.mgdn.com.br
+      mgdn.port: "80"
+      mgdn.health: /alive
+      mgdn.backup.volume: vaultwarden-data
+      mgdn.backup.ready: db.sqlite3
+      mgdn.backup.exclude: icon_cache,tmp
+      mgdn.summary: "db.sqlite3: select count(*) || ' usuário(s), ' || (select count(*) from ciphers) || ' item(ns)' from users"
     mem_limit: 128m
 
   # Finanças pessoais (ADR 0012), só pela tailnet. A senha do servidor é definida
@@ -55,6 +71,13 @@ services:
       ACTUAL_ALLOWED_LOGIN_METHODS: password
     volumes:
       - actual-data:/data
+    labels:
+      mgdn.url: https://actual.mgdn.com.br
+      mgdn.port: "5006"
+      mgdn.health: /health
+      mgdn.backup.volume: actual-data
+      mgdn.backup.ready: server-files/account.sqlite
+      mgdn.summary: "server-files/account.sqlite: select count(*) || ' orçamento(s)' from files"
     mem_limit: 256m
 
   blocky:

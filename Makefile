@@ -102,6 +102,13 @@ test: ## Testa resolução e bloqueio nas duas VMs (IPs públicos, de casa) e pe
 	   echo -n "$$s: bloqueia pagead2.googlesyndication.com -> "; dig +short +time=3 +tries=1 @$$s pagead2.googlesyndication.com | head -1; \
 	 done
 
+# --- Apps -----------------------------------------------------------------------
+
+.PHONY: new-app
+new-app: ## Gera um app só da tailnet (NAME= IMAGE=img:tag PORT= [DATA=/data] [HEALTH=/] [READY=arq] [MEM=256m])
+	@test -n "$(NAME)" -a -n "$(IMAGE)" -a -n "$(PORT)" || { echo "uso: make new-app NAME=notas IMAGE=org/notas:1.2.3 PORT=8080 [DATA=/data] [HEALTH=/health]"; exit 1; }
+	@scripts/new-app.py "$(NAME)" "$(IMAGE)" "$(PORT)" $(if $(DATA),--data "$(DATA)") $(if $(HEALTH),--health "$(HEALTH)") $(if $(READY),--ready "$(READY)") $(if $(MEM),--mem "$(MEM)")
+
 # --- Qualidade ------------------------------------------------------------------
 
 .PHONY: hooks fmt lint test-infra
