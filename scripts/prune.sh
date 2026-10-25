@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rotação dos backups (ADR 0007): o Object Storage da Magalu não tem lifecycle,
-# então a política roda aqui, depois de cada backup. A regra está em
+# Rotação dos backups (ADR 0007): a política roda do lado do cliente, aqui, depois
+# de cada backup. A regra está em
 # retention.py (diários por 30 dias, um mensal por 12 meses, nunca menos de 7).
 # O object lock garante que nada com menos de 30 dias pode ser apagado, mesmo que
 # este script ou a VM sejam comprometidos.
