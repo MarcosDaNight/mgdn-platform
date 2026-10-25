@@ -16,6 +16,5 @@ redundância**.
 
 ## Mitigação
 - Container travado: `make ssh HOST=...` e `sudo docker compose -f /opt/mgdn-platform/deploy/<role>/compose.yaml restart blocky`.
-- VM morta: `make apply` recria. Na **secundária**, gere uma chave nova antes (`make tailnet-key`
-  → `secondary_tailnet_authkey`) e, depois, atualize o IP dela no Headscale (README,
-  "Backup e DR").
+- VM morta: `make apply` recria. A secundária volta com a mesma identidade na tailnet,
+  guardada nos segredos (ADR 0014); a principal restaura o backup e o drain roda sozinho.

@@ -18,6 +18,8 @@ main() {
 
   # shellcheck source=/dev/null
   source /etc/mgdn-platform/env
+  # shellcheck source=/dev/null
+  [[ ! -f "$SECRETS_ENV" ]] || source "$SECRETS_ENV"
   local state_dir=$STATE_DIR
   local force="${1:-}"
   mkdir -p "$state_dir"
@@ -82,6 +84,10 @@ main() {
 REPO_DIR=/opt/mgdn-platform
 STATE_DIR=/var/lib/mgdn-platform
 METRICS_DIR=$STATE_DIR/metrics
+# Segredos do repositório (ADR 0014): a chave do host vem do cloud-init; o arquivo
+# decifrado é lido pelos scripts depois do env e tem precedência sobre ele.
+AGE_KEY=/etc/mgdn-platform/age.key
+SECRETS_ENV=/etc/mgdn-platform/secrets.env
 
 # self_heal: reaplica o estado do commit atual. Sem mudanças no Git, `compose up -d`
 # não faz nada; se um container foi parado ou removido à mão, ele volta.
@@ -143,9 +149,17 @@ image_of() {
   compose config --format json | python3 -c "import json,sys;print(json.load(sys.stdin)['services']['$1']['image'])"
 }
 
+# has_secrets: há chave neste host e arquivo de segredos no commit em checkout.
+# Hosts sem chave (criados antes do ADR 0014) seguem só com o env do cloud-init.
+has_secrets() { [[ -f "$AGE_KEY" && -f "$REPO_DIR/secrets/$ROLE.env.age" ]]; }
+
 validate() {
   checkout "$1"
   compose config --quiet || return 1
+  if has_secrets; then
+    "$REPO_DIR/scripts/secrets.sh" decrypt "$ROLE" "$AGE_KEY" /run/mgdn-secrets.validate || return 1
+    rm -f /run/mgdn-secrets.validate
+  fi
   compose run --rm --no-deps -T blocky validate || return 1
   if has_service prometheus; then
     compose run --rm --no-deps -T --entrypoint promtool prometheus \
@@ -177,6 +191,12 @@ apply() {
   local from="$1" to="$2"
   checkout "$to"
 
+  if has_secrets; then
+    "$REPO_DIR/scripts/secrets.sh" decrypt "$ROLE" "$AGE_KEY" "$SECRETS_ENV"
+    # shellcheck source=/dev/null
+    source "$SECRETS_ENV"
+  fi
+
   local unit reload=false
   for unit in deploy/systemd/*; do
     if ! cmp -s "$unit" "/etc/systemd/system/${unit##*/}"; then
@@ -203,8 +223,13 @@ apply() {
   compose pull --quiet
 
   # Token da Cloudflare para o Traefik emitir certificados por DNS-01 (ADR 0010).
+  # O Traefik só lê o arquivo no boot: token novo pede restart.
+  local restart_traefik=false
   if has_service traefik; then
     install -d -m 0700 /etc/mgdn-platform/traefik
+    if [[ -f /etc/mgdn-platform/traefik/cf-dns-token && "$(cat /etc/mgdn-platform/traefik/cf-dns-token)" != "${CLOUDFLARE_DNS_TOKEN:-}" ]]; then
+      restart_traefik=true
+    fi
     printf '%s' "${CLOUDFLARE_DNS_TOKEN:-}" | install -m 0600 /dev/stdin /etc/mgdn-platform/traefik/cf-dns-token
   fi
 
@@ -231,6 +256,10 @@ apply() {
   compose up -d --remove-orphans
 
   [[ -z "$from" ]] && return 0
+  if $restart_traefik; then
+    log "token da Cloudflare mudou; reiniciando traefik"
+    compose restart traefik
+  fi
   local svc
   for svc in $(compose config --services); do
     if ! git diff --quiet "$from" "$to" -- "deploy/common/$svc" "deploy/$ROLE/$svc"; then

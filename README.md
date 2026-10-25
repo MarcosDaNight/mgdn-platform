@@ -129,8 +129,9 @@ Por que isso e não ArgoCD: [ADR 0011](docs/adr/0011-gitops-sem-argocd.md).
   ([`infra/dns.tf`](infra/dns.tf)).
 - **Em todo PR que mexe em `infra/`**, o workflow `terraform-plan` comenta o resultado do
   plano, só com ações e endereços. Recriar uma VM ou um IP público ganha um aviso ⚠️.
-- O workflow usa uma chave **só de leitura**. O apply continua manual (`make apply`), porque
-  recriar a principal pede `make headscale-drain` antes.
+- O workflow usa uma chave **só de leitura**. O apply continua manual (`make apply`). Ele
+  mostra o plano, pede confirmação e, se a principal for recriada, roda o
+  `make headscale-drain` sozinho antes de aplicar o mesmo plano.
 - Os secrets são `TF_PLAN_MGC_API_KEY`, `TF_PLAN_STATE_ACCESS_KEY`,
   `TF_PLAN_STATE_SECRET_KEY` e `TF_PLAN_TFVARS`. Sem eles, o plano é pulado.
 
@@ -176,9 +177,9 @@ Os painéis ficam em `make tunnel`, que abre o Grafana em `localhost:3000`.
   | Disco enchendo, RAM baixa, OOM, certificado sem renovar, aparelho sumido da tailnet há 30 dias | [host](docs/runbooks/host.md) |
   | O healthchecks.io parou de receber o Watchdog (caminho de alertas quebrado) | [watchdog](docs/runbooks/watchdog.md) |
 
-- **Configurar:** instale o app **ntfy**, assine o tópico secreto e coloque
-  `https://ntfy.sh/<tópico>?template=alertmanager` em `alert_ntfy_url`. Isso recria a
-  principal, então rode `make headscale-drain` antes.
+- **Configurar:** instale o app **ntfy**, assine o tópico secreto e grave
+  `https://ntfy.sh/<tópico>?template=alertmanager` com
+  `make secrets-set ROLE=primary KEY=ALERT_NTFY_URL`. Um PR aplica, sem recriar a VM.
 - As regras têm testes em `deploy/primary/prometheus/tests/`. Eles rodam no CI e na VM antes
   de cada deploy.
 
@@ -193,7 +194,7 @@ do healthchecks.io avisam por fora, pela integração de ntfy e por e-mail:
 | **backup** | o `backup.sh`, de hora em hora | backup parado ou falhando |
 | **watchdog** | o Alertmanager, com o alerta `Watchdog` sempre disparando, a cada 1–2 min | caminho de alertas quebrado com a VM no ar ([ADR 0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md)) |
 
-A URL do watchdog vai em `alert_watchdog_url`. A configuração do check (período, grace e
+A URL do watchdog vai em `ALERT_WATCHDOG_URL`, nos segredos da principal. A configuração do check (período, grace e
 canais) e o teste de aceite estão no [runbook](docs/runbooks/watchdog.md).
 
 ## Segurança
@@ -201,10 +202,12 @@ canais) e o teste de aceite estão no [runbook](docs/runbooks/watchdog.md).
 - **Superfície mínima:** a porta 53 só aceita o IP de casa, a 443 serve o Traefik e a 22 fica
   fechada. O Vaultwarden e os painéis só abrem pela tailnet. Fora dela, o Vaultwarden responde
   403, e o nome `vault.mgdn.com.br` nem existe no DNS público.
-- **Segredos fora do repositório:**
-  - os tokens e URLs secretas chegam às VMs pelo cloud-init, a partir do `terraform.tfvars`
-    (fora do Git);
-  - os containers os leem de arquivos com permissão restrita.
+- **Segredos cifrados no repositório ([ADR 0014](docs/adr/0014-segredos-cifrados-no-repositorio.md)):**
+  - tokens, URLs de ping, credenciais do backup e o IP de casa ficam em
+    `secrets/<papel>.env.age`, cifrados com `age` para a chave do host e a de administração;
+  - trocar um segredo é um PR (`make secrets-edit ROLE=primary`), sem recriar VM;
+  - o cloud-init leva só a chave age de cada host;
+  - os containers leem os segredos de arquivos com permissão restrita.
 - **Backups:**
   - são cifrados com `age`; a chave privada fica no gerenciador de senhas;
   - ficam num bucket com object lock COMPLIANCE, que nem o dono apaga antes de 30 dias.
@@ -213,7 +216,7 @@ canais) e o teste de aceite estão no [runbook](docs/runbooks/watchdog.md).
   - o Trivy roda em todo PR;
   - o Dependabot propõe as atualizações.
 - **Repositório público:** IP de casa, hostname do DDNS, URLs de healthcheck e tópicos do ntfy
-  nunca entram no Git. O plano do Terraform no PR mostra só endereços, nunca valores.
+  nunca entram no Git em claro. O plano do Terraform no PR mostra só endereços, nunca valores.
 
 ## Operação
 
@@ -267,12 +270,10 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
 
 - **Roteador:** em *Servidor DHCP*, use `primary_ip` como DNS primário e `secondary_ip` como
   secundário (`terraform -chdir=infra output`). As duas VMs bloqueiam igual.
-- **Recriar a secundária:** ela entra na tailnet com uma chave de uso único.
-  1. Gere a chave com `make tailnet-key`.
-  2. Coloque-a em `secondary_tailnet_authkey` no `terraform.tfvars`.
-  3. Rode `make apply` em até 30 min.
-- Depois, remova o nó antigo (`make tailnet-nodes`, depois `headscale nodes delete -i <id>`).
-  Se o IP dela mudar, atualize `dns.nameservers.global` no Headscale por PR.
+- **Recriar a secundária:** `make apply`. A identidade dela na tailnet fica nos segredos
+  (`TAILSCALED_STATE_B64`, ADR 0014), então ela volta como o mesmo nó, em `100.64.0.4`, sem
+  chave de uso único. Para atualizar a identidade guardada: `make secrets-capture-identity`
+  e um PR.
 
 ### Backup e DR ([ADR 0006](docs/adr/0006-backup-imutavel-e-restore-drill.md))
 
@@ -282,7 +283,7 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
     SQLite: hoje, o Headscale (banco e chave Noise), o cofre do Vaultwarden, os orçamentos e a
     conta do Actual Budget e os certificados do Traefik;
   - o estado do Tailscale da VM principal.
-- **Recriar a VM principal:** **antes do `make apply`, rode `make headscale-drain`.**
+- **Recriar a VM principal:** o `make apply` roda o `make headscale-drain` antes, sozinho.
   - O drain faz um backup novo e para o Headscale de forma limpa.
   - Sem ele, clientes Linux com conexão longa ficam até ~15 min presos a uma conexão TCP meio
     aberta com a VM destruída.
@@ -369,6 +370,7 @@ Todo dia 1º, uma issue lista o que não dá para automatizar:
 | [0011](docs/adr/0011-gitops-sem-argocd.md) | GitOps sem ArgoCD: self-heal, plano no PR e auto-merge de patches |
 | [0012](docs/adr/0012-actual-budget-e-dados-bancarios.md) | Actual Budget e dados bancários sem Open Finance pago |
 | [0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md) | Dead man's switch do caminho de alertas com o healthchecks.io |
+| [0014](docs/adr/0014-segredos-cifrados-no-repositorio.md) | Segredos cifrados no repositório com age |
 | [0015](docs/adr/0015-contrato-de-app-por-labels.md) | Contrato de app por labels do Compose |
 
 As fontes por trás de cada decisão (SRE, GitOps, Tailscale, Let's Encrypt etc.) estão em

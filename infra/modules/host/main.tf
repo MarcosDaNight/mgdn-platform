@@ -79,8 +79,8 @@ resource "mgc_virtual_machine_instances" "this" {
     })
     repo_url       = var.repo_url
     repo_branch    = var.repo_branch
-    hosts          = var.etc_hosts
     extra_packages = var.extra_packages
+    age_key        = var.age_key
   }))
 }
 

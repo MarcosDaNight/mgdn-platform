@@ -12,6 +12,9 @@ set -euo pipefail
 
 # shellcheck source=/dev/null
 source /etc/mgdn-platform/env
+# Segredos decifrados pelo gitops-sync (ADR 0014); têm precedência sobre o env.
+# shellcheck source=/dev/null
+[[ ! -f /etc/mgdn-platform/secrets.env ]] || source /etc/mgdn-platform/secrets.env
 repo=/opt/mgdn-platform
 # shellcheck source=scripts/s3.sh
 source "$repo/scripts/s3.sh"

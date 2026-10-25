@@ -7,6 +7,9 @@ set -uo pipefail
 
 # shellcheck source=/dev/null
 source /etc/mgdn-platform/env
+# Segredos decifrados pelo gitops-sync (ADR 0014); têm precedência sobre o env.
+# shellcheck source=/dev/null
+[[ ! -f /etc/mgdn-platform/secrets.env ]] || source /etc/mgdn-platform/secrets.env
 # shellcheck source=/dev/null
 source /opt/mgdn-platform/deploy/common/platform.env
 

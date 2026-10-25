@@ -7,3 +7,6 @@
 .terraform/
 tfplan
 crash.log
+
+# Segredos em claro (ADR 0014): só os .env.age entram no Git
+secrets/*.env

@@ -45,16 +45,11 @@ variable "public_ports" {
 }
 
 variable "env" {
-  description = "Variáveis gravadas em /etc/mgdn-platform/env (lidas pelos scripts do GitOps)."
+  description = "Variáveis não secretas gravadas em /etc/mgdn-platform/env (lidas pelos scripts do GitOps). Segredos vão em secrets/<papel>.env.age (ADR 0014)."
   type        = map(string)
   default     = {}
 }
 
-variable "etc_hosts" {
-  description = "Entradas extras do /etc/hosts (hostname => IP)."
-  type        = map(string)
-  default     = {}
-}
 
 variable "repo_url" {
   description = "Repositório Git acompanhado pelo GitOps."
@@ -70,4 +65,11 @@ variable "extra_packages" {
   description = "Pacotes apt adicionais só deste host. Mudar a lista altera o cloud-init e recria a VM."
   type        = list(string)
   default     = []
+}
+
+variable "age_key" {
+  description = "Chave privada age do host (AGE-SECRET-KEY-1...), gravada em /etc/mgdn-platform/age.key para o GitOps decifrar secrets/<papel>.env.age (ADR 0014). Vazio: o host segue só com o env."
+  type        = string
+  default     = ""
+  sensitive   = true
 }
