@@ -22,7 +22,4 @@ Checklist mensal de manutenção do mgdn-platform. Marque os itens e feche a iss
 - [ ] Revisar e mergear os PRs abertos do Dependabot. Isso também mantém o repo ativo: o GitHub desativa workflows agendados (como este) depois de 60 dias sem commits.
 
 ### Prazos
-- [ ] API key `blocky-terraform` (Terraform, `.env`): expira em **28/09/2027**.
-- [ ] API keys `mgdn-backup` e `mgdn-backup-ro`: expiram em **24/10/2027**. Renovar exige atualizar o `terraform.tfvars` (recria a principal; rode `make headscale-drain` antes) e os secrets do GitHub.
-- [ ] Domínio `mgdn.com.br`: renovação no registro.br até **24/10/2027** (deixe a renovação automática ligada).
-- [ ] Token da Cloudflare (DNS do `mgdn.com.br`): expira em **25/10/2027**. Renovar exige atualizar o `terraform.tfvars` (recria a principal; `make headscale-drain` antes).
+Os vencimentos de chaves, tokens e do domínio ficam em `.github/deadlines.yml`. O workflow `deadlines` abre uma issue 30 dias antes de cada um.

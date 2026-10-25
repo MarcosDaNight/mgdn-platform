@@ -141,9 +141,10 @@ Por que isso e não ArgoCD: [ADR 0011](docs/adr/0011-gitops-sem-argocd.md).
 | `ci` | PR e push | pre-commit, `terraform validate` e `test`, `compose config`, `promtool test rules` |
 | `supply-chain` | PR, push e semanal | Trivy em todas as imagens do Compose: CRITICAL com correção disponível bloqueia ([ADR 0008](docs/adr/0008-cadeia-de-suprimentos.md)) |
 | `terraform-plan` | PR em `infra/` | plano comentado no PR (acima) |
-| `dependabot-auto-merge` | PR do Dependabot | atualizações **patch** entram sozinhas depois do CI verde; minor e major esperam revisão |
+| `dependabot-auto-merge` | PR do Dependabot | **patch** de tudo e **minor** de imagens entram sozinhos depois do CI verde; o resto espera revisão |
 | `dr-drill` | todo dia 2 | restaura o backup num runner descartável e publica RTO e RPO numa issue |
 | `monthly-checklist` | todo dia 1º | abre a issue com as verificações manuais do mês |
+| `deadlines` | diário | abre uma issue 30 dias antes de cada prazo de `.github/deadlines.yml` (chaves, token, domínio) |
 
 A `main` é protegida: todo merge precisa de PR e dos checks `terraform`, `deploy-config`
 (primary e secondary), `pre-commit` e `supply-chain`.

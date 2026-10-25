@@ -1,9 +1,10 @@
 name: dependabot-auto-merge
 
-# Auto-merge de atualizações de PATCH do Dependabot (ADR 0011). O merge nativo do
-# GitHub só acontece depois de todos os checks obrigatórios da main (testes, Trivy,
-# terraform test); aí o GitOps aplica, com validação, rollback e alertas de SLO.
-# Minor e major continuam com revisão manual.
+# Auto-merge do Dependabot (ADR 0011): PATCH de tudo e MINOR de imagens de container.
+# O merge nativo do GitHub só acontece depois de todos os checks obrigatórios da main
+# (testes, Trivy, terraform test); aí o GitOps aplica, com validação, rollback e alertas
+# de SLO e de host, e o healthcheck externo confere os apps. Major e minor de Actions e
+# providers continuam com revisão manual.
 on: pull_request
 
 permissions:
@@ -18,15 +19,31 @@ jobs:
       - id: meta
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
 
-      - name: Habilitar auto-merge (patch)
-        if: steps.meta.outputs.update-type == 'version-update:semver-patch'
+      - id: policy
+        env:
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+        run: |
+          if [[ "$UPDATE_TYPE" == "version-update:semver-patch" ]] ||
+             [[ "$UPDATE_TYPE" == "version-update:semver-minor" && "$ECOSYSTEM" == docker* ]]; then
+            echo "auto=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "auto=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Habilitar auto-merge
+        if: steps.policy.outputs.auto == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
         run: |
           gh pr merge --auto --squash "$PR_URL"
-          gh pr comment "$PR_URL" --body "🤖 Atualização de patch: auto-merge habilitado (entra quando todos os checks passarem)."
+          gh pr comment "$PR_URL" --body "🤖 ${UPDATE_TYPE#version-update:semver-}: auto-merge habilitado (entra quando todos os checks passarem)."
 
-      - name: Revisão manual (minor/major)
-        if: steps.meta.outputs.update-type != 'version-update:semver-patch'
-        run: echo "::notice::${{ steps.meta.outputs.update-type }} — mantido para revisão manual."
+      - name: Revisão manual
+        if: steps.policy.outputs.auto != 'true'
+        env:
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+        run: echo "::notice::$UPDATE_TYPE ($ECOSYSTEM) — mantido para revisão manual."

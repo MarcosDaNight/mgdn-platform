@@ -1,0 +1,35 @@
+# Prazos que vencem fora da plataforma: chaves, tokens e o domínio. O workflow
+# `deadlines` confere todo dia e abre uma issue `warn_days` (padrão 30) dias antes de
+# cada vencimento. Ao renovar, atualize `expires` aqui e feche a issue.
+#
+# Campos: name, expires (AAAA-MM-DD), warn_days (opcional), renew (como renovar).
+
+- name: API key blocky-terraform
+  expires: 2027-09-28
+  renew: |
+    Gere uma chave nova no portal da Magalu Cloud com as mesmas permissões e troque
+    `TF_VAR_mgc_api_key` no `.env`. Apague a antiga depois do primeiro `make plan`.
+
+- name: API keys mgdn-backup e mgdn-backup-ro
+  expires: 2027-10-24
+  renew: |
+    1. Gere as duas chaves novas (object storage: leitura e escrita / só leitura).
+    2. `make secrets-edit ROLE=primary`: troque `BACKUP_ACCESS_KEY` e `BACKUP_SECRET_KEY`
+       (ADR 0014) e abra um PR. A VM aplica sem recriação.
+    3. Troque os secrets `BACKUP_RO_ACCESS_KEY` e `BACKUP_RO_SECRET_KEY` do GitHub e rode o
+       `dr-drill` à mão para confirmar.
+
+- name: Domínio mgdn.com.br
+  expires: 2027-10-24
+  warn_days: 60
+  renew: |
+    Renove no registro.br (deixe a renovação automática ligada). Sem o domínio, o
+    Headscale, o Vaultwarden e o Actual perdem os certificados.
+
+- name: Token da Cloudflare (DNS do mgdn.com.br)
+  expires: 2027-10-25
+  renew: |
+    1. Gere um token novo com Zone:Read e DNS:Edit só em `mgdn.com.br`.
+    2. Troque `cloudflare_api_token` no `terraform.tfvars` (usado pelo Terraform).
+    3. `make secrets-set ROLE=primary KEY=CLOUDFLARE_DNS_TOKEN` e um PR (usado pelo Traefik;
+       o GitOps o reinicia quando o token muda).

@@ -1,0 +1,38 @@
+name: deadlines
+
+# Prazos como código: abre uma issue quando um item de .github/deadlines.yml entra na
+# janela de aviso (padrão 30 dias). Substitui a seção "Prazos" do checklist mensal.
+on:
+  schedule:
+    - cron: "0 11 * * *" # 08:00 BRT
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  due:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Abrir issues dos prazos próximos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          due=$(python3 scripts/deadlines.py --due --today "$(TZ=America/Sao_Paulo date +%F)")
+          [[ "$due" != "[]" ]] || { echo "nenhum prazo nos próximos dias"; exit 0; }
+          gh label create prazo --color D93F0B --description "Prazo de renovação" --force >/dev/null
+          jq -c '.[]' <<<"$due" | while read -r d; do
+            title="Prazo: $(jq -r .name <<<"$d") vence em $(jq -r .expires <<<"$d")"
+            # Uma issue por prazo e data: fechar sem renovar não reabre, mudar a data abre outra.
+            if gh issue list --state all --label prazo --search "\"$title\" in:title" --json title -q '.[].title' | grep -qxF "$title"; then
+              echo "já existe: $title"; continue
+            fi
+            left=$(jq -r .days_left <<<"$d")
+            body=$(printf '**Faltam %s dia(s).**\n\n### Como renovar\n\n%s\n\nDepois de renovar, atualize `expires` em `.github/deadlines.yml` e feche esta issue.\n' \
+              "$left" "$(jq -r .renew <<<"$d")")
+            gh issue create --title "$title" --body "$body" --label prazo --assignee "$GITHUB_REPOSITORY_OWNER"
+          done
