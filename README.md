@@ -444,7 +444,7 @@ utilizável e tem um critério de aceite verificável.
 | 5. Apps pessoais | domínio `mgdn.com.br` como código, Traefik, Vaultwarden só na tailnet, migração dos aparelhos sem novo registro | Vaultwarden responde 403 fora da tailnet |
 | Finalização | self-heal e métricas do GitOps, plano no PR, auto-merge de patches ([ADR 0011](docs/adr/0011-gitops-sem-argocd.md)) | um container parado à mão voltou sozinho no sync seguinte |
 | Dead man's switch | alerta Watchdog → healthchecks.io, avisando por fora da plataforma ([ADR 0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md)) | *a medir:* Alertmanager parado → aviso no celular, procedimento no [runbook](docs/runbooks/watchdog.md#teste-de-aceite) |
-| Menos processos manuais | alertas de host e de aparelhos sumidos, prazos como código, auto-merge de minor das imagens, contrato de app por labels e `make new-app` ([ADR 0015](docs/adr/0015-contrato-de-app-por-labels.md)) | DR drill com backup e restore guiados pelos labels: Vaultwarden (110 itens) e Actual (1 orçamento) de pé, RTO 25 s ([issue #39](https://github.com/MarcosDaNight/mgdn-platform/issues/39)) |
+| Menos processos manuais | alertas de host e de aparelhos sumidos, prazos como código, auto-merge de minor das imagens, contrato de app por labels e `make new-app` ([ADR 0015](docs/adr/0015-contrato-de-app-por-labels.md)) | o primeiro backup feito pelo código novo na VM, restaurado pelo DR drill guiado pelos labels: Vaultwarden (110 itens) e Actual (1 orçamento) de pé, RTO 21 s ([issue #43](https://github.com/MarcosDaNight/mgdn-platform/issues/43)) |
 
 **Medições de DR:**
 
