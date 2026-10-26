@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="icons/mgdn-icon-dark.svg">
+    <img src="icons/mgdn-icon.svg" alt="mgdn-platform" width="120">
+  </picture>
+</p>
+
 # mgdn-platform
 
 [![ci](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/ci.yml)
@@ -423,6 +430,7 @@ scripts/
   s3.sh                    cliente S3 mínimo (curl --aws-sigv4)
   deadlines.py             prazos de .github/deadlines.yml (validação e aviso)
   home-ddns.sh             DDNS de casa pela API da Cloudflare (opcional)
+icons/                     ícone (claro, escuro e monocromático) e a imagem de prévia do GitHub
 docs/adr/                  decisões de arquitetura
 docs/runbooks/             o que fazer quando cada alerta tocar
 docs/adicionar-app.md      passo a passo para um app novo
