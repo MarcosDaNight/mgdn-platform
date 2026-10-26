@@ -109,6 +109,8 @@ jobs:
           t=$(mktemp)
           printf "%s\n" "# ok" "A_URL='https://exemplo.net/x?y=1&z=2'" "HOME_DDNS_HOST=casa.exemplo.net" >"$t"
           scripts/secrets.sh check "$t"
+          # Regressão: na VM (cloud-init e systemd) não há HOME, e o script roda com set -u.
+          env -i PATH="$PATH" scripts/secrets.sh check "$t"
           for bad in 'X=$(id)' 'A_URL=http://inseguro' 'X=a b' 'HOME_DDNS_HOST=nao_e_host'; do
             printf '%s\n' "$bad" >"$t"
             if scripts/secrets.sh check "$t" 2>/dev/null; then echo "::error::check aceitou: $bad"; exit 1; fi

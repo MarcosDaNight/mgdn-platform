@@ -18,7 +18,8 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-admin_key=${MGDN_AGE_KEY:-$HOME/.config/mgdn-platform/age/admin.key}
+# Na VM (cloud-init, systemd) não há HOME: só os comandos locais usam esta chave.
+admin_key=${MGDN_AGE_KEY:-${HOME:-/root}/.config/mgdn-platform/age/admin.key}
 
 die() {
   echo "[secrets] $*" >&2
