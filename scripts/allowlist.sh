@@ -44,7 +44,8 @@ if [[ -n "${HOME_DDNS_HOST:-}" ]]; then
 fi
 
 home_ip=$(cat "$state" 2>/dev/null || true)
-elements=$(echo "$home_ip ${EXTRA_ALLOWED_CIDRS//,/ }" | xargs | tr ' ' ',')
+extra=${EXTRA_ALLOWED_CIDRS:-}
+elements=$(echo "$home_ip ${extra//,/ }" | xargs | tr ' ' ',')
 iface=$(ip route show default | awk '{print $5; exit}')
 
 nft -f - <<EOF
