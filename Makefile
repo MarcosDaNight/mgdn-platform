@@ -94,7 +94,7 @@ headscale-undrain: ## Desfaz o drain (apply cancelado ou falhou): Headscale e Gi
 
 # --- Operação -------------------------------------------------------------------
 
-.PHONY: ssh tunnel grafana-password status allowlist sync logs querylog test backup backups
+.PHONY: ssh tunnel grafana-password grafana-reset-password status allowlist sync logs querylog test backup backups
 ssh: ## SSH na VM (HOST=mgdn-primary ou mgdn-secondary, pela tailnet)
 	@$(SSH)
 
@@ -107,6 +107,13 @@ tunnel: ## Grafana :3000, Prometheus :9090, Blocky :4000 e Alertmanager :9093 em
 
 grafana-password: ## Senha do admin do Grafana
 	@$(SSH) sudo cut -d= -f2 /etc/mgdn-platform/grafana.env
+
+# A senha do arquivo só vale quando o Grafana cria o banco. Se o banco já existia ou a
+# senha foi trocada na interface, os dois divergem; isto os alinha de novo.
+grafana-reset-password: ## Redefine a senha do admin do Grafana para a de make grafana-password
+	@$(SSH) 'pw=$$(sudo cut -d= -f2 /etc/mgdn-platform/grafana.env) && \
+	  sudo docker exec $$(sudo docker ps -q --filter label=com.docker.compose.service=grafana) grafana cli admin reset-admin-password "$$pw" >/dev/null && \
+	  echo "senha do admin redefinida; use a de make grafana-password"'
 
 status: ## Commit aplicado, containers, tailnet, timers, RAM e disco
 	@$(SSH) 'echo "commit aplicado: $$(sudo cat /var/lib/mgdn-platform/applied | cut -c1-7)"; \
