@@ -56,6 +56,9 @@ main() {
     log "ERRO: validação falhou para ${target:0:7}; nada foi aplicado"
     echo "$target" >"$state_dir/failed"
     [[ -n "$applied" ]] && checkout "$applied"
+    # VM nova: sem o timer, nada tentaria de novo e a VM ficaria parada até ser
+    # recriada. Com ele, o próximo commit (a correção) é aplicado sozinho.
+    [[ -n "$applied" ]] || install_gitops_timer
     exit 1
   fi
 
@@ -136,6 +139,13 @@ METRICS
 }
 
 log() { echo "[gitops] $*"; }
+
+install_gitops_timer() {
+  install -m 0644 "$REPO_DIR"/deploy/systemd/mgdn-gitops.{service,timer} /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --quiet --now mgdn-gitops.timer
+  log "timer do GitOps instalado: o próximo commit será tentado sozinho"
+}
 
 checkout() { git -c advice.detachedHead=false checkout --quiet --force "$1"; }
 
