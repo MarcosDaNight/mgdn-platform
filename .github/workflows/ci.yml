@@ -93,6 +93,14 @@ jobs:
       - run: pipx run pre-commit run --all-files --show-diff-on-failure
       - name: política de retenção dos backups (autoteste)
         run: python3 scripts/retention.py --self-test
+      # Chaves SSH dos hosts (ADR 0014): uma linha ed25519 por VM, com os três nomes
+      # pelos quais o Makefile a acessa.
+      - name: known_hosts das VMs
+        run: |
+          for h in mgdn-primary mgdn-secondary; do
+            grep -qE "^$h,100\.64\.0\.[0-9]+,[0-9.]+ ssh-ed25519 AAAA" deploy/ssh/known_hosts || { echo "::error::$h ausente ou fora do formato em deploy/ssh/known_hosts"; exit 1; }
+          done
+          ssh-keygen -lf deploy/ssh/known_hosts
       - name: prazos (.github/deadlines.yml)
         run: python3 scripts/deadlines.py --check
       # ADR 0014: os segredos só entram cifrados, um destinatário por linha age1 do
@@ -111,7 +119,7 @@ jobs:
           scripts/secrets.sh check "$t"
           # Regressão: na VM (cloud-init e systemd) não há HOME, e o script roda com set -u.
           env -i PATH="$PATH" scripts/secrets.sh check "$t"
-          for bad in 'X=$(id)' 'A_URL=http://inseguro' 'X=a b' 'HOME_DDNS_HOST=nao_e_host'; do
+          for bad in 'X=$(id)' 'A_URL=http://inseguro' 'X=a b' 'HOME_DDNS_HOST=nao_e_host' 'SSH_HOST_ED25519_KEY_B64=xxx'; do
             printf '%s\n' "$bad" >"$t"
             if scripts/secrets.sh check "$t" 2>/dev/null; then echo "::error::check aceitou: $bad"; exit 1; fi
           done

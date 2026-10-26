@@ -81,3 +81,32 @@ continuavam fora desse caminho.
   age. Ordem: merge → `make secrets-bootstrap` (instala as chaves nas VMs atuais) →
   `make secrets-capture-identity` → `make apply`.
 - O `age` passa a ser instalado nas duas VMs, e o computador do dono também precisa dele.
+
+## Incidente na migração (2026-10-25)
+
+O primeiro `make apply` da migração deixou a plataforma fora por cerca de 3 h (19:30–23:25).
+As VMs recriadas subiram, mas nenhum serviço respondeu. Duas falhas da mesma classe, que o
+env antigo do cloud-init escondia por definir todas as variáveis, mesmo vazias:
+
+1. `secrets.sh` expandia `$HOME` com `set -u`, e o cloud-init e o systemd não definem `HOME`.
+   A decifragem falhava, e o primeiro deploy saía na validação antes de instalar os timers do
+   GitOps, então a VM nunca puxava a correção ([#45](https://github.com/MarcosDaNight/mgdn-platform/pull/45)).
+2. `allowlist.sh` expandia `EXTRA_ALLOWED_CIDRS` com `set -u`, e os segredos omitem valores
+   vazios. O allowlist falhava e o deploy abortava antes dos containers
+   ([#46](https://github.com/MarcosDaNight/mgdn-platform/pull/46)).
+
+O diagnóstico veio do log de console da VM (`mgc virtual-machine instances init-logs`), já que
+sem tailnet não havia SSH. Ficaram:
+
+- o CI roda o `secrets.sh` num ambiente vazio (`env -i`);
+- se o primeiro deploy de uma VM nova falha, o timer do GitOps é instalado mesmo assim, e o
+  próximo commit corrige a VM sem recriá-la ([#47](https://github.com/MarcosDaNight/mgdn-platform/pull/47));
+- lição: antes de recriar, rodar os scripts da VM com `env -i` e sem as variáveis opcionais.
+
+## Atualização: chaves SSH dos hosts (2026-10-26)
+
+Cada recriação gerava chaves SSH novas, e o `make ssh` parava no aviso "REMOTE HOST
+IDENTIFICATION HAS CHANGED", que se aprende a ignorar. Agora a chave ed25519 de cada host fica
+nos segredos (`SSH_HOST_ED25519_KEY_B64`), e o `gitops-sync` a instala e oferece só ela. A
+pública fica em `deploy/ssh/known_hosts`, que o Makefile usa com verificação estrita. Trocar a
+chave é `make ssh-hostkey ROLE=<papel>` e um PR.

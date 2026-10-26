@@ -80,6 +80,12 @@ check() {
         err=1
       }
       ;;
+    SSH_HOST_*_KEY_B64)
+      base64 -d <<<"$value" 2>/dev/null | head -1 | grep -qx -- "-----BEGIN OPENSSH PRIVATE"" KEY-----" || {
+        echo "[secrets] linha $n: $key deve ser uma chave privada OpenSSH em base64" >&2
+        err=1
+      }
+      ;;
     esac
   done <"$file"
   return "$err"
