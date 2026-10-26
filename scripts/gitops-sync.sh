@@ -162,7 +162,11 @@ ssh_host_key() {
     changed=true
   fi
   $changed || return 0
-  if sshd -t; then
+  # Com o ssh.socket do Ubuntu 24.04, o /run/sshd só existe depois da primeira conexão,
+  # e sem ele o `sshd -t` falha mesmo com a configuração certa.
+  install -d -m 0755 /run/sshd
+  local err
+  if err=$(sshd -t 2>&1); then
     systemctl try-reload-or-restart ssh.service
     log "chave SSH do host instalada ($(ssh-keygen -lf "$key.pub" | awk '{print $2}'))"
   else
@@ -171,7 +175,7 @@ ssh_host_key() {
       mv "$key.anterior" "$key"
       ssh-keygen -y -f "$key" >"$key.pub"
     fi
-    log "AVISO: sshd rejeitou a chave do host dos segredos; mantida a anterior"
+    log "AVISO: sshd rejeitou a chave do host dos segredos (${err:-sem saída}); mantida a anterior"
   fi
 }
 
