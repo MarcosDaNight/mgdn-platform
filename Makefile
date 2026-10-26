@@ -12,7 +12,11 @@ TFKEYS  := k=$$(../scripts/secrets.sh host-keys) && export TF_VAR_host_age_keys=
 # HOST=<IP público> com ssh_break_glass = true no terraform.tfvars.
 ROLE    ?= primary
 HOST    ?= mgdn-primary
-SSH      = ssh -o StrictHostKeyChecking=accept-new ubuntu@$(HOST)
+# Chaves dos hosts versionadas (deploy/ssh/known_hosts, ADR 0014): as VMs as mantêm
+# nas recriações, então a verificação é estrita e nunca depende do ~/.ssh/known_hosts.
+KNOWN_HOSTS ?= $(CURDIR)/deploy/ssh/known_hosts
+SSH_OPTS = -o UserKnownHostsFile=$(KNOWN_HOSTS) -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519
+SSH      = ssh $(SSH_OPTS) ubuntu@$(HOST)
 # O papel vem do hostname (mgdn-primary -> primary): o /etc/mgdn-platform/env é 0600.
 COMPOSE := sudo docker compose -f /opt/mgdn-platform/deploy/$$(hostname | sed s/^mgdn-//)/compose.yaml
 HS      := sudo docker exec $$(sudo docker ps -q --filter label=com.docker.compose.service=headscale) headscale
@@ -42,7 +46,7 @@ destroy: ## Destroi tudo, inclusive o IP público (o roteador de casa precisaria
 
 # --- Segredos (ADR 0014) --------------------------------------------------------
 
-.PHONY: secrets-edit secrets-set secrets-keys secrets-bootstrap secrets-capture-identity
+.PHONY: secrets-edit secrets-set secrets-keys secrets-bootstrap secrets-capture-identity ssh-hostkey
 secrets-edit: ## Edita os segredos de um papel no editor (ROLE=primary|secondary) e recifra
 	@scripts/secrets.sh edit $(ROLE)
 
@@ -55,13 +59,16 @@ secrets-keys: ## Lista as chaves (sem valores) dos segredos de um papel (ROLE=..
 
 secrets-bootstrap: ## Instala a chave age nas VMs já existentes (uma vez; VMs novas recebem pelo cloud-init)
 	@for r in primary secondary; do \
-	  ssh -o StrictHostKeyChecking=accept-new ubuntu@mgdn-$$r 'sudo install -m 0600 /dev/stdin /etc/mgdn-platform/age.key' < $$HOME/.config/mgdn-platform/age/$$r.key && \
+	  ssh $(SSH_OPTS) ubuntu@mgdn-$$r 'sudo install -m 0600 /dev/stdin /etc/mgdn-platform/age.key' < $$HOME/.config/mgdn-platform/age/$$r.key && \
 	  echo "mgdn-$$r: chave instalada"; \
 	done
 	@echo "No próximo commit, o GitOps passa a ler os segredos do repositório (make sync para já)."
 
+ssh-hostkey: ## Gera/troca a chave SSH do host (ROLE=primary|secondary): segredo + deploy/ssh/known_hosts
+	@scripts/ssh-hostkey.sh $(ROLE)
+
 secrets-capture-identity: ## Guarda a identidade da secundária na tailnet nos segredos (recriada, volta com o mesmo IP)
-	@ssh ubuntu@mgdn-secondary 'sudo base64 -w0 /var/lib/tailscale/tailscaled.state' | scripts/secrets.sh set secondary TAILSCALED_STATE_B64
+	@ssh $(SSH_OPTS) ubuntu@mgdn-secondary 'sudo base64 -w0 /var/lib/tailscale/tailscaled.state' | scripts/secrets.sh set secondary TAILSCALED_STATE_B64
 
 # --- Tailnet --------------------------------------------------------------------
 

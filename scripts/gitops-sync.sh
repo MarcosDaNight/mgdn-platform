@@ -140,6 +140,41 @@ METRICS
 
 log() { echo "[gitops] $*"; }
 
+# ssh_host_key: instala a chave SSH do host guardada nos segredos (ADR 0014). A VM
+# recriada mantém a identidade, e o deploy/ssh/known_hosts do repositório continua
+# valendo. Só a chave ed25519 é oferecida. Configuração inválida não chega ao sshd.
+ssh_host_key() {
+  [[ -n "${SSH_HOST_ED25519_KEY_B64:-}" ]] || return 0
+  local key=/etc/ssh/ssh_host_ed25519_key conf=/etc/ssh/sshd_config.d/10-mgdn-hostkey.conf
+  local tmp changed=false
+  tmp=$(mktemp)
+  base64 -d <<<"$SSH_HOST_ED25519_KEY_B64" >"$tmp"
+  if ! cmp -s "$tmp" "$key"; then
+    [[ ! -f "$key" ]] || cp -a "$key" "$key.anterior"
+    install -m 0600 "$tmp" "$key"
+    ssh-keygen -y -f "$key" >"$key.pub"
+    chmod 0644 "$key.pub"
+    changed=true
+  fi
+  rm -f "$tmp"
+  if [[ "$(cat "$conf" 2>/dev/null)" != "HostKey $key" ]]; then
+    echo "HostKey $key" >"$conf"
+    changed=true
+  fi
+  $changed || return 0
+  if sshd -t; then
+    systemctl try-reload-or-restart ssh.service
+    log "chave SSH do host instalada ($(ssh-keygen -lf "$key.pub" | awk '{print $2}'))"
+  else
+    rm -f "$conf"
+    if [[ -f "$key.anterior" ]]; then
+      mv "$key.anterior" "$key"
+      ssh-keygen -y -f "$key" >"$key.pub"
+    fi
+    log "AVISO: sshd rejeitou a chave do host dos segredos; mantida a anterior"
+  fi
+}
+
 install_gitops_timer() {
   install -m 0644 "$REPO_DIR"/deploy/systemd/mgdn-gitops.{service,timer} /etc/systemd/system/
   systemctl daemon-reload
@@ -206,6 +241,7 @@ apply() {
     # shellcheck source=/dev/null
     source "$SECRETS_ENV"
   fi
+  ssh_host_key
 
   local unit reload=false
   for unit in deploy/systemd/*; do

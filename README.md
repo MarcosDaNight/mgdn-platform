@@ -1,26 +1,28 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="icons/mgdn-icon-dark.svg">
-    <img src="icons/mgdn-icon.svg" alt="mgdn-platform" width="120">
-  </picture>
+  <img src="icons/social-preview.png" alt="mgdn-platform: DNS, tailnet and personal apps as code" width="100%">
 </p>
 
-# mgdn-platform
+<p align="center">
 
 [![ci](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/ci.yml)
 [![supply-chain](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/supply-chain.yml/badge.svg)](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/supply-chain.yml)
 [![dr-drill](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/dr-drill.yml/badge.svg)](https://github.com/MarcosDaNight/mgdn-platform/actions/workflows/dr-drill.yml)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
 
+</p>
+
 Plataforma pessoal na [Magalu Cloud](https://magalu.cloud). Ela oferece:
 
 - **DNS com bloqueio de anúncios e rastreadores**, em casa e fora dela;
 - **uma rede privada (tailnet)** para acessar tudo sem expor serviços na internet;
-- **um gerenciador de senhas** (Vaultwarden) que só abre pela tailnet;
-- **redundância entre regiões** e backups imutáveis.
+- **apps pessoais só pela tailnet:** gerenciador de senhas (Vaultwarden) e finanças
+  (Actual Budget);
+- **redundância entre regiões**, backups imutáveis e restore testado todo mês;
+- **SLO, alertas no celular e vigilância externa**, com runbook para cada alerta.
 
-Tudo roda em duas VMs pequenas, com orçamento de **~R$ 100/mês**, e é operado por IaC e
-GitOps: o estado desejado vive neste repositório e as VMs se reconciliam sozinhas.
+Tudo roda em duas VMs pequenas, com orçamento de **~R$ 100/mês**, e é operado como código:
+o estado desejado, inclusive os segredos (cifrados), vive neste repositório, e as VMs se
+reconciliam sozinhas a cada merge.
 
 É a evolução do [blocky-cloud-dns](https://github.com/MarcosDaNight/blocky-cloud-dns),
 congelado na release [`1.0.0`](https://github.com/MarcosDaNight/blocky-cloud-dns/releases/tag/1.0.0)
@@ -57,6 +59,7 @@ flowchart LR
       tr["Traefik :443<br/>TLS (Let's Encrypt)"]
       hs["Headscale"]
       vw["Vaultwarden"]
+      ab["Actual Budget"]
       b1["Blocky"]
       mon["Prometheus<br/>Grafana"]
     end
@@ -71,13 +74,15 @@ flowchart LR
   lan -. "secundário" .-> b2
   ts --> b1
   dev -. "controle<br/>headscale.mgdn.com.br" .-> tr
-  ts -- "vault.mgdn.com.br" --> tr
+  ts -- "vault / actual<br/>.mgdn.com.br" --> tr
   tr --> hs
   tr --> vw
+  tr --> ab
   b1 -- "DoH" --> up["Cloudflare / Quad9"]
   b2 -- "DoH" --> up
   hs -. "backup horário" .-> bkp
   vw -.-> bkp
+  ab -.-> bkp
 ```
 
 | Componente | Onde | Papel |
@@ -94,7 +99,8 @@ flowchart LR
 
 **Rede.** Na porta 53 pública, só o IP de casa é aceito. Ele é atualizado por DDNS. Fora de
 casa, os aparelhos usam o Blocky (`100.64.0.1`, com `100.64.0.4` de reserva) pela tailnet.
-A porta 22 fica fechada para a internet, e o SSH também passa pela tailnet.
+A porta 22 fica fechada para a internet, e o SSH também passa pela tailnet, verificando a
+chave do host contra o `deploy/ssh/known_hosts` do repositório.
 
 ## Como as mudanças chegam às VMs
 
@@ -201,8 +207,8 @@ do healthchecks.io avisam por fora, pela integração de ntfy e por e-mail:
 | **backup** | o `backup.sh`, de hora em hora | backup parado ou falhando |
 | **watchdog** | o Alertmanager, com o alerta `Watchdog` sempre disparando, a cada 1–2 min | caminho de alertas quebrado com a VM no ar ([ADR 0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md)) |
 
-A URL do watchdog vai em `ALERT_WATCHDOG_URL`, nos segredos da principal. A configuração do check (período, grace e
-canais) e o teste de aceite estão no [runbook](docs/runbooks/watchdog.md).
+A URL do watchdog vai em `ALERT_WATCHDOG_URL`, nos segredos da principal. A configuração do
+check (período, grace e canais) e o teste de aceite estão no [runbook](docs/runbooks/watchdog.md).
 
 ## Segurança
 
@@ -215,6 +221,9 @@ canais) e o teste de aceite estão no [runbook](docs/runbooks/watchdog.md).
   - trocar um segredo é um PR (`make secrets-edit ROLE=primary`), sem recriar VM;
   - o cloud-init leva só a chave age de cada host;
   - os containers leem os segredos de arquivos com permissão restrita.
+- **Chave SSH estável:** a chave de cada host também fica nos segredos, e a VM recriada volta
+  com ela. O `make ssh` confere contra o `deploy/ssh/known_hosts` com verificação estrita, então
+  o aviso de chave trocada só aparece se algo estiver errado de verdade.
 - **Backups:**
   - são cifrados com `age`; a chave privada fica no gerenciador de senhas;
   - ficam num bucket com object lock COMPLIANCE, que nem o dono apaga antes de 30 dias.
@@ -240,7 +249,9 @@ canais) e o teste de aceite estão no [runbook](docs/runbooks/watchdog.md).
 | `make querylog` / `make logs` | domínios bloqueados / logs dos containers |
 | `make tunnel` | Grafana, Prometheus, Alertmanager e API do Blocky em `localhost` |
 | `make backup` / `make backups` | backup agora / lista os backups no bucket |
-| `make plan` / `make apply` | Terraform local (credenciais em `.env`) |
+| `make plan` / `make apply` | Terraform local (credenciais em `.env`); o apply faz o drain da principal sozinho |
+| `make secrets-edit ROLE=…` / `make secrets-set ROLE=… KEY=…` | edita ou grava um segredo cifrado; um PR aplica |
+| `make ssh-hostkey ROLE=…` | troca a chave SSH de um host (segredo + `known_hosts`) |
 | `make lint` / `make test-infra` | pre-commit e `terraform test` |
 | `make new-app NAME=… IMAGE=… PORT=…` | gera um app só da tailnet (Compose, Traefik, Blocky e labels de backup) |
 
@@ -418,8 +429,13 @@ deploy/                    o que roda nas VMs (fonte da verdade do GitOps)
   secondary/compose.yaml   Blocky e node-exporter (DNS secundário em br-se1)
   systemd/                 timers: gitops, healthcheck, allowlist, backup, limpeza semanal
   home/                    timer opcional do DDNS de casa (roda em casa, não nas VMs)
+  ssh/known_hosts          chaves públicas SSH das VMs (verificação estrita no Makefile)
+secrets/                   segredos de cada papel cifrados com age, e os destinatários
 scripts/
   gitops-sync.sh           por papel: validar → aplicar → verificar → rollback; self-heal e métricas
+  secrets.sh               editar, decifrar e validar os segredos (ADR 0014)
+  ssh-hostkey.sh           gera a chave SSH de um host nos segredos e no known_hosts
+  tf-apply.sh              `make apply`: plano salvo, confirmação e drain automático
   tailnet-join.sh          registra a VM na tailnet
   allowlist.sh             porta 53 pública só para o IP de casa (DDNS)
   healthcheck.sh           DNS, bloqueio, tráfego de casa, disco, Headscale, DNS da tailnet, apps
@@ -455,6 +471,7 @@ utilizável e tem um critério de aceite verificável.
 | Finalização | self-heal e métricas do GitOps, plano no PR, auto-merge de patches ([ADR 0011](docs/adr/0011-gitops-sem-argocd.md)) | um container parado à mão voltou sozinho no sync seguinte |
 | Dead man's switch | alerta Watchdog → healthchecks.io, avisando por fora da plataforma ([ADR 0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md)) | *a medir:* Alertmanager parado → aviso no celular, procedimento no [runbook](docs/runbooks/watchdog.md#teste-de-aceite) |
 | Menos processos manuais | alertas de host e de aparelhos sumidos, prazos como código, auto-merge de minor das imagens, contrato de app por labels e `make new-app` ([ADR 0015](docs/adr/0015-contrato-de-app-por-labels.md)) | o primeiro backup feito pelo código novo na VM, restaurado pelo DR drill guiado pelos labels: Vaultwarden (110 itens) e Actual (1 orçamento) de pé, RTO 21 s ([issue #43](https://github.com/MarcosDaNight/mgdn-platform/issues/43)) |
+| Segredos no repositório | segredos cifrados com `age`, `make apply` com drain automático, chaves SSH estáveis ([ADR 0014](docs/adr/0014-segredos-cifrados-no-repositorio.md)) | URL do watchdog ativada por PR, sem recriar VM ([#48](https://github.com/MarcosDaNight/mgdn-platform/pull/48)); DR drill depois da migração: RTO 23 s ([issue #49](https://github.com/MarcosDaNight/mgdn-platform/issues/49)). A migração teve ~3 h de queda; as causas e correções estão no ADR |
 
 **Medições de DR:**
 
