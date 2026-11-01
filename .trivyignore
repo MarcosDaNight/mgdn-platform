@@ -6,3 +6,8 @@
 # Risco baixo aqui: o Actual só é alcançável pela tailnet, através do Traefik, que não
 # confia em X-Forwarded-For vindo do cliente. Remover ao subir para a 26.11.0 (PR #33).
 CVE-2026-90711 exp:2026-11-15
+
+# brotli-libs nas imagens atuais do Vaultwarden 1.37.4 e Actual 26.10.0. O fix
+# já existe no Alpine, mas os mantenedores ainda não republicaram tags estáveis
+# com 1.2.1-r0; remover assim que houver release oficial atualizada.
+CVE-2026-111497 exp:2026-11-15
