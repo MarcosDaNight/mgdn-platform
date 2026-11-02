@@ -16,7 +16,8 @@ services:
       # Contrato de app (ADR 0015): lido pelo backup, restore, healthcheck e DR drill.
       mgdn.backup.volume: headscale-data
       mgdn.backup.ready: db.sqlite
-    mem_limit: 128m
+    # Pico medido (memory.peak, 7 dias): 40 MB; limite = 1,5x o pico.
+    mem_limit: 64m
 
   traefik:
     image: traefik:v3.7.16@sha256:1336e85aaed293bd63d005086e0dd013b04078b26aaeb1c18b26a2f928af7e65
@@ -93,7 +94,8 @@ services:
       - ../common/blocky/config.yml:/app/config.yml:ro
       - blocky-cache:/app/cache
       - blocky-logs:/logs
-    mem_limit: 384m
+    # Pico medido (memory.peak, 7 dias, com o refresh das listas): 140 MB; limite = 1,5x o pico.
+    mem_limit: 224m
 
   prometheus:
     image: prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
@@ -116,7 +118,8 @@ services:
     command: ["--config.file=/etc/blackbox/blackbox.yml"]
     volumes:
       - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
-    mem_limit: 64m
+    # Pico medido: 16 MB; limite = 1,5x o pico.
+    mem_limit: 32m
 
   alertmanager:
     image: prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
@@ -143,7 +146,8 @@ services:
     pid: host
     volumes:
       - /:/host:ro,rslave
-    mem_limit: 64m
+    # Pico medido: 26 MB; limite = 1,5x o pico.
+    mem_limit: 48m
 
   grafana:
     image: grafana/grafana:13.3.0-slim@sha256:a66f098dd9b2e1b5a19287ff176db02d895122488c6e39b3dfcd3fb897039225
@@ -173,6 +177,26 @@ services:
     # Medido: ~190 MB em uso ocioso; 192m deixava o Grafana no teto do cgroup.
     mem_limit: 320m
 
+  # Gerado por `make new-app` (docs/adicionar-app.md). Só pela tailnet.
+  freshrss:
+    image: freshrss/freshrss:1.30.4-alpine@sha256:840765ea01fbaa1ea5b59f298878d224f62a4e83f8bba74d1a192ccd1d13669a
+    restart: unless-stopped
+    environment:
+      TZ: America/Sao_Paulo
+      BASE_URL: https://freshrss.mgdn.com.br
+      # Atualiza os feeds a cada 30 min (a imagem só agenda o cron com isto definido).
+      CRON_MIN: "2,32"
+    volumes:
+      - freshrss-data:/var/www/FreshRSS/data
+    labels:
+      mgdn.url: https://freshrss.mgdn.com.br
+      mgdn.port: "80"
+      mgdn.health: /api/
+      mgdn.backup.volume: freshrss-data
+      mgdn.backup.ready: config.php
+    # Estimado (ainda sem medição): ajustar com `docker stats` depois de alguns dias de uso.
+    mem_limit: 128m
+
 volumes:
   traefik-acme:
   vaultwarden-data:
@@ -184,3 +208,4 @@ volumes:
   prometheus-data:
   grafana-data:
   alertmanager-data:
+  freshrss-data:

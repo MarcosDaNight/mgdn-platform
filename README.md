@@ -92,6 +92,7 @@ flowchart LR
 | **Traefik** | principal | borda HTTPS com certificados por DNS-01, sem socket do Docker |
 | **Vaultwarden** | principal | cofre de senhas em `vault.mgdn.com.br`, só pela tailnet |
 | **Actual Budget** | principal | finanças pessoais em `actual.mgdn.com.br`, só pela tailnet ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)) |
+| **FreshRSS** | principal | leitor de RSS em `freshrss.mgdn.com.br`, só pela tailnet ([como usar](docs/freshrss.md)) |
 | **Prometheus, Alertmanager, Grafana, blackbox** | principal | métricas, SLO, alertas no celular (ntfy) e dashboards |
 | **node-exporter** | as duas VMs | métricas do host e do GitOps |
 | **Object Storage** | br-se1 | backups cifrados com object lock de 30 dias |
