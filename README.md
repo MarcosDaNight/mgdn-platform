@@ -512,6 +512,17 @@ HTTPS, healthcheck e backup.
 - [ ] **Talvez: importador de OFX para o Actual Budget**, num repositório separado. Só se a
   importação manual incomodar depois de um mês de uso
   ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)).
+- [ ] **Ghostfolio**, para as carteiras de investimento
+  ([docs](https://ghostfol.io/en/self-hosting)). Pede Postgres e Redis, que não cabem na
+  principal de 2 GB sem apertar o resto. Fica para quando a infraestrutura escalar (mais RAM
+  ou uma terceira VM).
+- [ ] **Aliases de e-mail pela Cloudflare Email Routing**
+  ([docs](https://developers.cloudflare.com/email-routing/)), como código em `infra/dns.tf`:
+  registros MX e regras de encaminhamento no Terraform, em vez de cadastrados à mão no
+  painel.
+- [ ] **App de notas self-hosted que leia Markdown**, no estilo do Obsidian: os arquivos
+  seguem como `.md` simples no volume (portáveis e no backup), e o app só os edita pela
+  tailnet. Antes, comparar as opções quanto à RAM e a guardar tudo em arquivos.
 
 ## Contribuindo
 
