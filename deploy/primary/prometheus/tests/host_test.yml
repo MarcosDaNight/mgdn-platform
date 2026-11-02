@@ -153,4 +153,3 @@ tests:
               summary: "Mais de 3 GB de saída em 24 h em primary"
               description: "Bem acima do normal (menos de 100 MB por dia). Procure um exit node esquecido ligado, um backup fora do lugar ou um download grande."
               runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
-
