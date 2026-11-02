@@ -54,8 +54,15 @@ aviso repete uma vez por semana.
 ## EgressMonthlyHigh / EgressDailyHigh
 
 Tráfego de saída da VM pela `eth0` acima de 20 GB em 30 dias, ou de 3 GB em 24 h. O normal
-medido hoje é de ~1 GB por mês na principal. Os limites são provisórios: ajuste-os (em
-`prometheus/rules/host.yml`) quando souber a franquia e o preço do GB da Magalu Cloud.
+medido hoje (8 dias, sem exit node) é de ~0,035 GB por dia em cada VM, no máximo 2 MB por hora,
+ou ~1 GB por mês. O backup horário para o Object Storage em br-se1 passa pela `eth0` e está
+incluído nessa base. Os limites (20 GB e 3 GB) ficam bem acima dela, mas são provisórios:
+ajuste-os (em `prometheus/rules/host.yml`) quando souber a franquia e o preço do GB da Magalu
+Cloud.
+
+O backup é um `tar` completo a cada hora, sem deduplicação: cada MB de backup soma ~0,7 GB por
+mês. Quando o FreshRSS e o Linkding crescerem, a base sobe junto; um backup de ~28 MB já
+consome os 20 GB mensais. Nesse caso, o alerta é um aviso útil, não um incidente.
 
 1. Veja de onde vem: `make ssh` e `sudo docker stats --no-stream`, ou o gráfico de rede do
    node-exporter no Grafana.
