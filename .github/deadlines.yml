@@ -35,10 +35,10 @@
        o GitOps o reinicia quando o token muda).
 
 - name: Medir o pico de RAM do FreshRSS
-  expires: 2026-11-11
+  expires: 2026-11-10
   warn_days: 1
   renew: |
-    A data é 8 dias depois do merge do FreshRSS (a issue abre 7 dias depois); se o merge
+    A data é 8 dias depois do merge do FreshRSS (02/11), então a issue abre em 09/11; se o merge
     atrasar, ajuste `expires`.
     1. `make ssh HOST=mgdn-primary`; para cada container, leia o pico em
        `/sys/fs/cgroup/system.slice/docker-<id>.scope/memory.peak` (`docker inspect -f '{{.Id}}'`).
