@@ -21,6 +21,13 @@ http:
       middlewares: [tailnet-only, security-headers]
       tls:
         certResolver: cloudflare
+    freshrss:
+      rule: Host(`freshrss.mgdn.com.br`)
+      entryPoints: [websecure]
+      service: freshrss
+      middlewares: [tailnet-only, security-headers]
+      tls:
+        certResolver: cloudflare
 
   middlewares:
     tailnet-only:
@@ -49,3 +56,7 @@ http:
       loadBalancer:
         servers:
           - url: http://actual:5006
+    freshrss:
+      loadBalancer:
+        servers:
+          - url: http://freshrss:80
