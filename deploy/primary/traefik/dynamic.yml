@@ -21,6 +21,13 @@ http:
       middlewares: [tailnet-only, security-headers]
       tls:
         certResolver: cloudflare
+    linkding:
+      rule: Host(`linkding.mgdn.com.br`)
+      entryPoints: [websecure]
+      service: linkding
+      middlewares: [tailnet-only, security-headers]
+      tls:
+        certResolver: cloudflare
     freshrss:
       rule: Host(`freshrss.mgdn.com.br`)
       entryPoints: [websecure]
@@ -56,6 +63,10 @@ http:
       loadBalancer:
         servers:
           - url: http://actual:5006
+    linkding:
+      loadBalancer:
+        servers:
+          - url: http://linkding:9090
     freshrss:
       loadBalancer:
         servers:

@@ -45,3 +45,15 @@
     2. Ajuste o `mem_limit` do `freshrss` em `deploy/primary/compose.yaml` para pelo menos 1,5x
        o pico e abra um PR. A soma dos limites tem de continuar em até 1800 MB.
     3. Apague este item.
+
+- name: Medir o pico de RAM do Linkding
+  expires: 2026-11-18
+  warn_days: 1
+  renew: |
+    A data é 8 dias depois do merge do Linkding (a issue abre 7 dias depois); ajuste `expires`
+    para a data do merge + 8 dias, porque este PR está esperando o upstream corrigir o Trivy.
+    1. `make ssh HOST=mgdn-primary`; leia o pico em
+       `/sys/fs/cgroup/system.slice/docker-<id>.scope/memory.peak` (`docker inspect -f '{{.Id}}'`).
+    2. Ajuste o `mem_limit` do `linkding` em `deploy/primary/compose.yaml` para pelo menos 1,5x
+       o pico e abra um PR. A soma dos limites tem de continuar em até 1800 MB.
+    3. Apague este item.

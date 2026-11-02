@@ -178,6 +178,25 @@ services:
     mem_limit: 320m
 
   # Gerado por `make new-app` (docs/adicionar-app.md). Só pela tailnet.
+  linkding:
+    image: sissbruecker/linkding:1.47.0-alpine@sha256:04e67acd04f1f1b3edd1bdd36fcf0dd5efaf8cdd99444e14be92c608575fa87a
+    restart: unless-stopped
+    environment:
+      # Atrás do Traefik (HTTPS), o Django recusa POSTs sem a origem confiável.
+      LD_CSRF_TRUSTED_ORIGINS: https://linkding.mgdn.com.br
+    volumes:
+      - linkding-data:/etc/linkding/data
+    labels:
+      mgdn.url: https://linkding.mgdn.com.br
+      mgdn.port: "9090"
+      mgdn.health: /health
+      mgdn.backup.volume: linkding-data
+      mgdn.backup.ready: db.sqlite3
+      mgdn.summary: "db.sqlite3: select count(*) || ' favorito(s)' from bookmarks_bookmark"
+    # Estimado (ainda sem medição): ajustar com `docker stats` depois de alguns dias de uso.
+    mem_limit: 144m
+
+  # Gerado por `make new-app` (docs/adicionar-app.md). Só pela tailnet.
   freshrss:
     image: freshrss/freshrss:1.30.4-alpine@sha256:840765ea01fbaa1ea5b59f298878d224f62a4e83f8bba74d1a192ccd1d13669a
     restart: unless-stopped
@@ -208,4 +227,5 @@ volumes:
   prometheus-data:
   grafana-data:
   alertmanager-data:
+  linkding-data:
   freshrss-data:
