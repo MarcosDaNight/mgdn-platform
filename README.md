@@ -60,6 +60,7 @@ flowchart LR
       hs["Headscale"]
       vw["Vaultwarden"]
       ab["Actual Budget"]
+      fr["FreshRSS"]
       b1["Blocky"]
       mon["Prometheus<br/>Grafana"]
     end
@@ -74,15 +75,17 @@ flowchart LR
   lan -. "secundário" .-> b2
   ts --> b1
   dev -. "controle<br/>headscale.mgdn.com.br" .-> tr
-  ts -- "vault / actual<br/>.mgdn.com.br" --> tr
+  ts -- "vault / actual / freshrss<br/>.mgdn.com.br" --> tr
   tr --> hs
   tr --> vw
   tr --> ab
+  tr --> fr
   b1 -- "DoH" --> up["Cloudflare / Quad9"]
   b2 -- "DoH" --> up
   hs -. "backup horário" .-> bkp
   vw -.-> bkp
   ab -.-> bkp
+  fr -.-> bkp
 ```
 
 | Componente | Onde | Papel |
@@ -300,7 +303,7 @@ Com o aparelho na tailnet, o DNS dele passa a ser o Blocky (`100.64.0.1`) em qua
   - o volume de todo serviço com o label `mgdn.backup.volume`
     ([ADR 0015](docs/adr/0015-contrato-de-app-por-labels.md)), com snapshot consistente de cada
     SQLite: hoje, o Headscale (banco e chave Noise), o cofre do Vaultwarden, os orçamentos e a
-    conta do Actual Budget e os certificados do Traefik;
+    conta do Actual Budget, o FreshRSS e os certificados do Traefik;
   - o estado do Tailscale da VM principal.
 - **Recriar a VM principal:** o `make apply` roda o `make headscale-drain` antes, sozinho.
   - O drain faz um backup novo e para o Headscale de forma limpa.
@@ -418,7 +421,7 @@ infra/                     Terraform (state remoto no Object Storage da Magalu)
 deploy/                    o que roda nas VMs (fonte da verdade do GitOps)
   common/blocky/           configuração do Blocky, compartilhada pelos papéis
   common/platform.env      nomes públicos da plataforma (hostname do Headscale)
-  primary/compose.yaml     traefik, headscale, vaultwarden, actual, blocky e monitoramento;
+  primary/compose.yaml     traefik, headscale, vaultwarden, actual, freshrss, blocky e monitoramento;
                            os labels mgdn.* de cada serviço são o contrato de app (ADR 0015)
   primary/headscale/       configuração do Headscale (DNS da tailnet = Blocky)
   primary/traefik/         borda HTTPS: Headscale e apps da tailnet (certificados por DNS-01)
