@@ -110,3 +110,47 @@ tests:
               summary: "Certificado vault.mgdn.com.br vence em 9d 22h 30m 0s"
               description: "O Traefik renova com 30 dias de folga; faltar menos de 14 significa que a renovação por DNS-01 está falhando."
               runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+  # Principal manda 40 MB por hora (~29 GB em 30 dias); a secundária, 1 MB por hora.
+  # O tráfego do docker0 não conta: só a eth0 sai para a internet.
+  - interval: 1h
+    input_series:
+      - series: 'node_network_transmit_bytes_total{host="primary",device="eth0"}'
+        values: "0+40000000x744"
+      - series: 'node_network_transmit_bytes_total{host="primary",device="docker0"}'
+        values: "0+900000000x744"
+      - series: 'node_network_transmit_bytes_total{host="secondary",device="eth0"}'
+        values: "0+1000000x744"
+    alert_rule_test:
+      - eval_time: 10d
+        alertname: EgressMonthlyHigh
+        exp_alerts: []
+      - eval_time: 25d
+        alertname: EgressMonthlyHigh
+        exp_alerts:
+          - exp_labels: {severity: warning, host: primary}
+            exp_annotations:
+              summary: "Tráfego de saída de primary acima de 20 GB nos últimos 30 dias"
+              description: "O tráfego de saída da VM pode ser cobrado pela Magalu Cloud. Confira o volume no Grafana e a franquia do plano."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+
+  # Principal sobe para 200 MB por hora (4,8 GB por dia); o docker0 não conta.
+  - interval: 1h
+    input_series:
+      - series: 'node_network_transmit_bytes_total{host="primary",device="eth0"}'
+        values: "0+200000000x48"
+      - series: 'node_network_transmit_bytes_total{host="primary",device="docker0"}'
+        values: "0+9000000000x48"
+    alert_rule_test:
+      - eval_time: 10h
+        alertname: EgressDailyHigh
+        exp_alerts: []
+      - eval_time: 20h
+        alertname: EgressDailyHigh
+        exp_alerts:
+          - exp_labels: {severity: warning, host: primary}
+            exp_annotations:
+              summary: "Mais de 3 GB de saída em 24 h em primary"
+              description: "Bem acima do normal (menos de 100 MB por dia). Procure um exit node esquecido ligado, um backup fora do lugar ou um download grande."
+              runbook_url: https://github.com/MarcosDaNight/mgdn-platform/blob/main/docs/runbooks/host.md
+

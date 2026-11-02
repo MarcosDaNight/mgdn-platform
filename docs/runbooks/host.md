@@ -50,3 +50,16 @@ aviso repete uma vez por semana.
 - Se o aparelho não é mais usado: `make tailnet-nodes` e, na principal,
   `headscale nodes delete -i <id>`. O alerta some na próxima coleta.
 - Se é usado (ex.: um notebook guardado), basta conectá-lo uma vez.
+
+## EgressMonthlyHigh / EgressDailyHigh
+
+Tráfego de saída da VM pela `eth0` acima de 20 GB em 30 dias, ou de 3 GB em 24 h. O normal
+medido hoje é de ~1 GB por mês na principal. Os limites são provisórios: ajuste-os (em
+`prometheus/rules/host.yml`) quando souber a franquia e o preço do GB da Magalu Cloud.
+
+1. Veja de onde vem: `make ssh` e `sudo docker stats --no-stream`, ou o gráfico de rede do
+   node-exporter no Grafana.
+2. Causas comuns: um exit node ligado esquecido, um download ou backup grande, ou um
+   serviço público respondendo a varredura.
+3. Se for uso legítimo (viagem), nada a fazer. Se o volume ficou alto de forma permanente,
+   reavalie o custo antes do mês fechar.
