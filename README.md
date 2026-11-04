@@ -194,6 +194,8 @@ Os painéis ficam em `make tunnel`, que abre o Grafana em `localhost:3000`.
 - **Configurar:** instale o app **ntfy**, assine o tópico secreto e grave
   `https://ntfy.sh/<tópico>?template=alertmanager` com
   `make secrets-set ROLE=primary KEY=ALERT_NTFY_URL`. Um PR aplica, sem recriar a VM.
+- Itens do FreshRSS com CVE, security ou vulnerability no título usam um tópico próprio
+  (`ALERT_NEWS_NTFY_URL`); veja [docs/freshrss.md](docs/freshrss.md#extensões).
 - As regras têm testes em `deploy/primary/prometheus/tests/`. Eles rodam no CI e na VM antes
   de cada deploy.
 

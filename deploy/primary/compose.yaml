@@ -186,8 +186,16 @@ services:
       BASE_URL: https://freshrss.mgdn.com.br
       # Atualiza os feeds a cada 30 min (a imagem só agenda o cron com isto definido).
       CRON_MIN: "2,32"
+      # A FreshRSS bloqueia pedidos a hosts internos. A extensão Webhook entrega os
+      # avisos ao Alertmanager (que repassa ao ntfy com a URL secreta); só ele é liberado.
+      INTERNAL_HOST_ALLOWLIST: alertmanager:9093
     volumes:
       - freshrss-data:/var/www/FreshRSS/data
+      # Extensões oficiais fixadas por commit (extensions.lock), uma a uma: montar o
+      # diretório inteiro esconderia as extensões que já vêm na imagem.
+      - ./freshrss/extensions/xExtension-Webhook:/var/www/FreshRSS/extensions/xExtension-Webhook:ro
+      - ./freshrss/extensions/xExtension-ReadingTime:/var/www/FreshRSS/extensions/xExtension-ReadingTime:ro
+      - ./freshrss/extensions/xExtension-TitleWrap:/var/www/FreshRSS/extensions/xExtension-TitleWrap:ro
     labels:
       mgdn.url: https://freshrss.mgdn.com.br
       mgdn.port: "80"

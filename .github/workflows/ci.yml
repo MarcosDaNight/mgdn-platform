@@ -57,6 +57,10 @@ jobs:
           amtool --verify.receivers=healthchecks alertname=Watchdog
           amtool --verify.receivers=ntfy alertname=DNSErrorBudgetFastBurn severity=page
           amtool --verify.receivers=ntfy alertname=TailnetNodeStale severity=info
+          amtool --verify.receivers=ntfy-noticias alertname="CVE-2026-0001 em algo" source=freshrss severity=info
+          if amtool --verify.receivers=ntfy alertname=x source=freshrss >/dev/null; then
+            echo "::error::item do FreshRSS cairia no tópico dos alertas"; exit 1
+          fi
           if amtool --verify.receivers=ntfy alertname=Watchdog >/dev/null; then
             echo "::error::o Watchdog chegaria no celular"; exit 1
           fi
@@ -67,6 +71,10 @@ jobs:
       - name: contrato dos apps
         if: matrix.role == 'primary'
         run: python3 ../../scripts/apps.py --compose compose.yaml check
+      # As extensões do FreshRSS são cópias do commit fixado em extensions.lock.
+      - name: extensões do FreshRSS (cópia == commit fixado)
+        if: matrix.role == 'primary'
+        run: ../../scripts/freshrss-extensions.sh verify
       # O gerador do `make new-app` produz um app que passa nas mesmas validações.
       - name: make new-app (numa cópia)
         if: matrix.role == 'primary'
