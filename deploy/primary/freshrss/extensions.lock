@@ -1,0 +1,5 @@
+# Extensões do FreshRSS fixadas por commit (nunca pela main). Lido por
+# scripts/freshrss-extensions.sh; para atualizar, troque `commit`, rode `sync` e revise o diff.
+upstream=https://github.com/FreshRSS/Extensions.git
+commit=56eb3a6ebef2136037388fca8e6d806becca4610
+extensions="xExtension-Webhook xExtension-ReadingTime xExtension-TitleWrap"

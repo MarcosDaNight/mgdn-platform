@@ -7,6 +7,13 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
+    # Itens do FreshRSS (extensão Webhook, docs/freshrss.md): tópico próprio, uma mensagem
+    # por item. Vem antes da rota `severity="info"` porque a primeira que casa vence.
+    - receiver: ntfy-noticias
+      matchers: ['source="freshrss"']
+      group_by: [alertname, item]
+      group_wait: 0s
+      repeat_interval: 168h
     # Dead man's switch (ADR 0013): o Watchdog vai só para o healthchecks.io, a cada
     # minuto, e nunca chega ao celular (sem `continue`, a rota padrão não o recebe).
     - receiver: healthchecks
@@ -25,6 +32,12 @@ receivers:
     webhook_configs:
       - url_file: /etc/alertmanager/secrets/ntfy-url
         send_resolved: true
+  # Tópico separado para os itens do FreshRSS (gerado pelo gitops-sync a partir de
+  # ALERT_NEWS_NTFY_URL). Sem resolved: o item não "resolve", só expira em 5 min.
+  - name: ntfy-noticias
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/ntfy-noticias-url
+        send_resolved: false
   # URL de ping do check (secreta), gerada pelo gitops-sync a partir de ALERT_WATCHDOG_URL.
   - name: healthchecks
     webhook_configs:

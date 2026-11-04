@@ -1,5 +1,8 @@
 # Hooks rápidos que rodam a cada commit (`make hooks` instala).
 # Validações que precisam de Docker/terraform init ficam no CI.
+# Código de terceiros copiado como está (scripts/freshrss-extensions.sh): os hooks de
+# formatação não podem mexer nele, ou a cópia deixa de bater com o commit fixado.
+exclude: ^deploy/primary/freshrss/extensions/
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
