@@ -205,15 +205,17 @@ services:
     # Estimado (ainda sem medição): ajustar com `docker stats` depois de alguns dias de uso.
     mem_limit: 128m
 
-  # App de estudo (CKA e Linux) com repetição espaçada, código em
+  # Timoneiro: app de estudo (CKA e Linux) com repetição espaçada, código em
   # github.com/MarcosDaNight/mgdn-study (ADR 0016). Só pela tailnet.
   estudo:
-    image: ghcr.io/marcosdanight/mgdn-study:02ee950e9465c99783878f5739dda9b4f45c1988@sha256:fdce8bfa1db3072da559fd4202fbb519b63a63323454e9484f6db6f6ae024fc6
+    image: ghcr.io/marcosdanight/mgdn-study:3653824ffd7d5c7d832ca8f55ac7a20b1bbf6752@sha256:fee8d51439f990cb9ba8f047710717ec4daf2a3d4a8ec0f245cd2f30ce59bbc4
     restart: unless-stopped
     environment:
       # Atrás do Traefik o Node só vê http://: sem ORIGIN, o SvelteKit rejeita os POSTs (CSRF).
       ORIGIN: https://estudo.mgdn.com.br
       TZ: America/Sao_Paulo
+      # Sem limite o V8 deixa o heap crescer (pico de 138 MB sob carga); com ele, 93 MB.
+      NODE_OPTIONS: --max-old-space-size=48 --max-semi-space-size=1
     volumes:
       - estudo-data:/data
     labels:
@@ -223,8 +225,8 @@ services:
       mgdn.backup.volume: estudo-data
       mgdn.backup.ready: study.sqlite
       mgdn.summary: "study.sqlite: select count(*) || ' item(ns) estudado(s), ' || (select count(*) from review) || ' revisão(ões)' from card"
-    # Estimado (ainda sem medição): ajustar com `docker stats` depois de alguns dias de uso.
-    mem_limit: 96m
+    # Pico medido sob carga (700 requisições, heap limitado): 93 MB; limite = 1,5x o pico.
+    mem_limit: 144m
 
 volumes:
   traefik-acme:

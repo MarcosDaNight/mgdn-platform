@@ -61,7 +61,7 @@ flowchart LR
       vw["Vaultwarden"]
       ab["Actual Budget"]
       fr["FreshRSS"]
-      es["Estudo"]
+      es["Timoneiro"]
       b1["Blocky"]
       mon["Prometheus<br/>Grafana"]
     end
@@ -99,7 +99,7 @@ flowchart LR
 | **Vaultwarden** | principal | cofre de senhas em `vault.mgdn.com.br`, só pela tailnet |
 | **Actual Budget** | principal | finanças pessoais em `actual.mgdn.com.br`, só pela tailnet ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)) |
 | **FreshRSS** | principal | leitor de RSS em `freshrss.mgdn.com.br`, só pela tailnet ([como usar](docs/freshrss.md)) |
-| **Estudo** | principal | app de estudo (CKA e Linux) em `estudo.mgdn.com.br`, só pela tailnet; imagem própria ([ADR 0016](docs/adr/0016-app-proprio-e-imagem-no-ghcr.md), [código](https://github.com/MarcosDaNight/mgdn-study)) |
+| **Timoneiro** | principal | app de estudo (CKA e Linux), serviço `estudo`, em `estudo.mgdn.com.br`, só pela tailnet; imagem própria ([ADR 0016](docs/adr/0016-app-proprio-e-imagem-no-ghcr.md), [código](https://github.com/MarcosDaNight/mgdn-study)) |
 | **Prometheus, Alertmanager, Grafana, blackbox** | principal | métricas, SLO, alertas no celular (ntfy) e dashboards |
 | **node-exporter** | as duas VMs | métricas do host e do GitOps |
 | **Object Storage** | br-se1 | backups cifrados com object lock de 30 dias |
