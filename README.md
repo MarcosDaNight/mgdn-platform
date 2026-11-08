@@ -55,7 +55,7 @@ flowchart LR
   end
   dev == "WireGuard" ==> ts(("tailnet<br/>DNS cifrado"))
   subgraph ne1["br-ne1"]
-    subgraph vm1["VM principal · BV2-2-10"]
+    subgraph vm1["VM principal · BV2-4-10"]
       tr["Traefik :443<br/>TLS (Let's Encrypt)"]
       hs["Headscale"]
       vw["Vaultwarden"]
@@ -403,6 +403,7 @@ credenciais viraram issues automáticas (`.github/deadlines.yml`).
 | [0014](docs/adr/0014-segredos-cifrados-no-repositorio.md) | Segredos cifrados no repositório com age |
 | [0015](docs/adr/0015-contrato-de-app-por-labels.md) | Contrato de app por labels do Compose |
 | [0016](docs/adr/0016-app-proprio-e-imagem-no-ghcr.md) | App próprio (estudo) e imagem publicada no ghcr.io |
+| [0017](docs/adr/0017-principal-com-4gb.md) | VM principal com 4 GB de RAM |
 
 As fontes por trás de cada decisão (SRE, GitOps, Tailscale, Let's Encrypt etc.) estão em
 [`docs/referencias.md`](docs/referencias.md).
@@ -411,7 +412,7 @@ As fontes por trás de cada decisão (SRE, GitOps, Tailscale, Let's Encrypt etc.
 
 | Recurso | Região | R$/mês |
 |---|---|---|
-| VM principal BV2-2-10 (2 vCPU, 2 GB) | br-ne1 | 59,99 |
+| VM principal BV2-4-10 (2 vCPU, 4 GB) | br-ne1 | a confirmar (era 59,99 na BV2-2-10) |
 | VM secundária BV1-1-10 (1 vCPU, 1 GB) | br-se1 | ~35 |
 | Object Storage, drills de DR, VMs efêmeras | — | centavos |
 | Domínio mgdn.com.br (Cloudflare DNS grátis) | — | ~3,50 |
@@ -499,6 +500,11 @@ utilizável e tem um critério de aceite verificável.
 Apps novos saem do `make new-app` ([guia](docs/adicionar-app.md)): só pela tailnet, com
 HTTPS, healthcheck e backup.
 
+- [ ] **Disco da principal em 79%** (6,8 de 8,7 GB, medido em 08/11/2026): é o limite agora, e o
+  alerta `HostDiskFilling` dispara acima de 80%. Veja o que ocupa (`docker system df`,
+  `du -xh --max-depth=2 /var/lib | sort -h | tail`), apague imagens antigas
+  (`docker image prune -a`) e decida se vale a BV2-4-20 (20 GB; confira como o disco cresce, que
+  pode não ser in-place). Depois, apague este item.
 - [ ] **Exit node na VM principal.** Não é um app novo, só uma opção do Tailscale
   ([docs](https://tailscale.com/kb/1103/exit-nodes)). Em Wi-Fi público, todo o tráfego do
   aparelho sai cifrado pela VM no Brasil. Antes, estime o custo do tráfego de saída.
@@ -524,9 +530,9 @@ HTTPS, healthcheck e backup.
   importação manual incomodar depois de um mês de uso
   ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)).
 - [ ] **Ghostfolio**, para as carteiras de investimento
-  ([docs](https://ghostfol.io/en/self-hosting)). Pede Postgres e Redis, que não cabem na
-  principal de 2 GB sem apertar o resto. Fica para quando a infraestrutura escalar (mais RAM
-  ou uma terceira VM).
+  ([docs](https://ghostfol.io/en/self-hosting)). Pede Postgres e Redis. Com a principal de 4 GB (desde
+  08/11/2026) pode caber, mas confira antes a soma dos `mem_limit` (`make new-app` avisa) e o
+  disco, que é o limite agora.
 - [ ] **Aliases de e-mail pela Cloudflare Email Routing**
   ([docs](https://developers.cloudflare.com/email-routing/)), como código em `infra/dns.tf`:
   registros MX e regras de encaminhamento no Terraform, em vez de cadastrados à mão no

@@ -1,6 +1,6 @@
 # Stack da VM principal (papel "primary"). Portas públicas: 53 (DNS, origem filtrada
 # no host) e 443 (Traefik: Headscale e apps da tailnet). UIs e APIs ficam em
-# 127.0.0.1 e são acessadas pela tailnet (`make tunnel`). Limites de memória dimensionados para a BV2-2-10.
+# 127.0.0.1 e são acessadas pela tailnet (`make tunnel`). Limites de memória dimensionados para a BV2-4-10 (4 GB; orçamento de 3400 MB).
 name: mgdn
 
 services:

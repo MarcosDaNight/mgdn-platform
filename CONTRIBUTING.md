@@ -60,8 +60,8 @@ docker compose run --rm --no-deps -T --entrypoint promtool -w /etc/prometheus/te
 
 - **Imagens fixadas por tag e digest** (`imagem:1.2.3@sha256:...`) e **Actions pelo SHA**,
   com a versão em comentário. O Dependabot mantém os dois atualizados.
-- **Todo serviço tem `mem_limit`.** A VM principal tem 2 GB, e a soma dos limites precisa
-  caber.
+- **Todo serviço tem `mem_limit`.** A VM principal tem 4 GB, e a soma dos limites precisa
+  caber (orçamento de 3400 MB, em `scripts/new-app.py`).
 - **Nada é publicado na internet além das portas 53 e 443.** UIs ficam em `127.0.0.1` ou
   atrás do Traefik com o middleware `tailnet-only`.
 - **Nenhum segredo ou dado pessoal no Git**: tokens, IP de casa, hostname do DDNS, URLs de
