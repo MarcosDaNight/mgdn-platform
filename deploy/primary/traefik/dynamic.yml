@@ -28,6 +28,13 @@ http:
       middlewares: [tailnet-only, security-headers]
       tls:
         certResolver: cloudflare
+    estudo:
+      rule: Host(`estudo.mgdn.com.br`)
+      entryPoints: [websecure]
+      service: estudo
+      middlewares: [tailnet-only, security-headers]
+      tls:
+        certResolver: cloudflare
 
   middlewares:
     tailnet-only:
@@ -60,3 +67,7 @@ http:
       loadBalancer:
         servers:
           - url: http://freshrss:80
+    estudo:
+      loadBalancer:
+        servers:
+          - url: http://estudo:3000
