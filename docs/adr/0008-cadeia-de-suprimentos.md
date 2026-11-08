@@ -15,6 +15,8 @@ node-exporter), e o CI usa Actions de terceiros. Dois riscos:
    imagem em uso.
 
 Assinar as imagens (cosign) não se aplica: não geramos imagens, só usamos as oficiais.
+(Em 2026-11-08 o [ADR 0016](0016-app-proprio-e-imagem-no-ghcr.md) abriu uma exceção: o app
+`estudo` tem imagem própria, sob a mesma política de digest e varredura.)
 
 Estado medido com o Trivy (out/2026): **0 CRITICAL** em todas as imagens; 29 HIGH, todas em
 bibliotecas embutidas e todas com correção já publicada a montante (grafana 7,

@@ -205,6 +205,27 @@ services:
     # Estimado (ainda sem medição): ajustar com `docker stats` depois de alguns dias de uso.
     mem_limit: 128m
 
+  # App de estudo (CKA e Linux) com repetição espaçada, código em
+  # github.com/MarcosDaNight/mgdn-study (ADR 0016). Só pela tailnet.
+  estudo:
+    image: ghcr.io/marcosdanight/mgdn-study:02ee950e9465c99783878f5739dda9b4f45c1988@sha256:fdce8bfa1db3072da559fd4202fbb519b63a63323454e9484f6db6f6ae024fc6
+    restart: unless-stopped
+    environment:
+      # Atrás do Traefik o Node só vê http://: sem ORIGIN, o SvelteKit rejeita os POSTs (CSRF).
+      ORIGIN: https://estudo.mgdn.com.br
+      TZ: America/Sao_Paulo
+    volumes:
+      - estudo-data:/data
+    labels:
+      mgdn.url: https://estudo.mgdn.com.br
+      mgdn.port: "3000"
+      mgdn.health: /healthz
+      mgdn.backup.volume: estudo-data
+      mgdn.backup.ready: study.sqlite
+      mgdn.summary: "study.sqlite: select count(*) || ' item(ns) estudado(s), ' || (select count(*) from review) || ' revisão(ões)' from card"
+    # Estimado (ainda sem medição): ajustar com `docker stats` depois de alguns dias de uso.
+    mem_limit: 96m
+
 volumes:
   traefik-acme:
   vaultwarden-data:
@@ -217,3 +238,4 @@ volumes:
   grafana-data:
   alertmanager-data:
   freshrss-data:
+  estudo-data:

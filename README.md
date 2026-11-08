@@ -61,6 +61,7 @@ flowchart LR
       vw["Vaultwarden"]
       ab["Actual Budget"]
       fr["FreshRSS"]
+      es["Estudo"]
       b1["Blocky"]
       mon["Prometheus<br/>Grafana"]
     end
@@ -75,17 +76,19 @@ flowchart LR
   lan -. "secundário" .-> b2
   ts --> b1
   dev -. "controle<br/>headscale.mgdn.com.br" .-> tr
-  ts -- "vault / actual / freshrss<br/>.mgdn.com.br" --> tr
+  ts -- "vault / actual / freshrss / estudo<br/>.mgdn.com.br" --> tr
   tr --> hs
   tr --> vw
   tr --> ab
   tr --> fr
+  tr --> es
   b1 -- "DoH" --> up["Cloudflare / Quad9"]
   b2 -- "DoH" --> up
   hs -. "backup horário" .-> bkp
   vw -.-> bkp
   ab -.-> bkp
   fr -.-> bkp
+  es -.-> bkp
 ```
 
 | Componente | Onde | Papel |
@@ -96,6 +99,7 @@ flowchart LR
 | **Vaultwarden** | principal | cofre de senhas em `vault.mgdn.com.br`, só pela tailnet |
 | **Actual Budget** | principal | finanças pessoais em `actual.mgdn.com.br`, só pela tailnet ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)) |
 | **FreshRSS** | principal | leitor de RSS em `freshrss.mgdn.com.br`, só pela tailnet ([como usar](docs/freshrss.md)) |
+| **Estudo** | principal | app de estudo (CKA e Linux) em `estudo.mgdn.com.br`, só pela tailnet; imagem própria ([ADR 0016](docs/adr/0016-app-proprio-e-imagem-no-ghcr.md), [código](https://github.com/MarcosDaNight/mgdn-study)) |
 | **Prometheus, Alertmanager, Grafana, blackbox** | principal | métricas, SLO, alertas no celular (ntfy) e dashboards |
 | **node-exporter** | as duas VMs | métricas do host e do GitOps |
 | **Object Storage** | br-se1 | backups cifrados com object lock de 30 dias |
@@ -398,6 +402,7 @@ credenciais viraram issues automáticas (`.github/deadlines.yml`).
 | [0013](docs/adr/0013-dead-mans-switch-com-healthchecks.md) | Dead man's switch do caminho de alertas com o healthchecks.io |
 | [0014](docs/adr/0014-segredos-cifrados-no-repositorio.md) | Segredos cifrados no repositório com age |
 | [0015](docs/adr/0015-contrato-de-app-por-labels.md) | Contrato de app por labels do Compose |
+| [0016](docs/adr/0016-app-proprio-e-imagem-no-ghcr.md) | App próprio (estudo) e imagem publicada no ghcr.io |
 
 As fontes por trás de cada decisão (SRE, GitOps, Tailscale, Let's Encrypt etc.) estão em
 [`docs/referencias.md`](docs/referencias.md).
