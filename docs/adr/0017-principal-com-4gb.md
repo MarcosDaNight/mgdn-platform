@@ -42,3 +42,16 @@ créditos renovados.
   depois do apply).
 - Há uma janela curta de indisponibilidade dos apps da tailnet (Headscale, Vaultwarden, Actual,
   FreshRSS, Timoneiro) durante o reinício. O DNS não cai.
+
+## Resultado (aplicado em 2026-11-08)
+
+- O plano real foi `1 to change, 0 to add, 0 to destroy`: **redimensionamento in-place**, sem
+  recriar a VM, o disco nem o IP. O `retype` terminou em segundos, e a VM voltou com os 12 serviços
+  de pé em cerca de um minuto, sem recriação nem perda de dados.
+- O sistema passou a ver **3,8 GiB** (2,8 GiB disponíveis). Logo após o boot, o uso era de apenas
+  **1,0 GiB**: os `mem_limit` somam bem mais do que a plataforma consome de fato.
+- O **orçamento de `mem_limit`** sobe de 1800 para **3400 MB**, mantendo a proporção anterior
+  (88% da RAM).
+- **Efeito colateral a tratar:** o disco continua de 10 GB e está em **79%**. Ele é o limite
+  agora (ver *Próximos passos* do README). O CI do `terraform-plan` não mostrou o plano porque os
+  secrets dele não estão configurados; o plano foi lido com `make plan`.

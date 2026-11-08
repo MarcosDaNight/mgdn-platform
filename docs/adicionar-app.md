@@ -20,7 +20,7 @@ flowchart LR
 
 | Pergunta | Por quê |
 |---|---|
-| **Cabe na RAM?** | A principal tem 2 GB. O `make new-app` avisa quando a soma dos `mem_limit` passa do que ela comporta; confira o uso real com `make status`. Apps que pedem Postgres, Redis ou workers de ML (Immich, Paperless) geralmente não cabem. |
+| **Cabe na RAM?** | A principal tem 4 GB (3400 MB de orçamento para os `mem_limit`). O `make new-app` avisa quando a soma dos `mem_limit` passa do que ela comporta; confira o uso real com `make status`. Apps que pedem Postgres, Redis ou workers de ML (Immich, Paperless) geralmente não cabem. |
 | **Guarda dados?** | Se guarda, passe `DATA=` e o volume entra no backup sozinho. Prefira apps com SQLite: o backup faz um snapshot consistente de cada banco sem parar o app. |
 | **Precisa de segredo?** | Vai cifrado no repositório, sem Terraform e sem recriar a VM ([ADR 0014](adr/0014-segredos-cifrados-no-repositorio.md)). |
 | **Muda uma decisão?** | Um app comum não precisa de ADR. Um app que exige uma porta pública nova ou outra VM precisa. |

@@ -24,8 +24,9 @@ import urllib.request
 
 DOMAIN = "mgdn.com.br"
 TAILNET_IP = "100.64.0.1"
-# RAM da principal (BV2-2-10) que os mem_limit podem somar, com folga para o host.
-RAM_BUDGET_MB = 1800
+# RAM da principal (BV2-4-10, 3,8 GiB) que os mem_limit podem somar, com folga para o host.
+# Mesma proporção de antes (1800 de 2048 MB = 88%): 88% de ~3890 MB.
+RAM_BUDGET_MB = 3400
 
 MANIFEST_TYPES = ", ".join(
     [
