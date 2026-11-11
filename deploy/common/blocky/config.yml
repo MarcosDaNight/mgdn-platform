@@ -36,6 +36,7 @@ customDNS:
     actual.mgdn.com.br: 100.64.0.1
     freshrss.mgdn.com.br: 100.64.0.1
     estudo.mgdn.com.br: 100.64.0.1
+    precos.mgdn.com.br: 100.64.0.1
 
 blocking:
   denylists:
