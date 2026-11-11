@@ -1,6 +1,6 @@
 # 0018. Monitor de preços (precos)
 
-- **Status:** aceita
+- **Status:** encerrada em 2026-11-11 (serviço removido; veja "Encerramento")
 - **Data:** 2026-11-10
 
 ## Contexto
@@ -48,3 +48,20 @@ quando um item chegar à meta ou ao menor preço, de forma confiável e **sem cu
 - `mem_limit` de 96m é **estimativa** (medido: 32 MB em repouso, sem uma rodada de coleta); ajustar com
   `memory.peak` depois de alguns dias.
 - Mais um serviço na principal e uma imagem de ~100 MB (estimativa) num disco que já passa de 79%.
+
+## Encerramento (2026-11-11)
+
+Desliguei o monitor no segundo dia. A KaBuM coletou normalmente, mas as outras lojas permitidas fecharam:
+
+- **Mercado Livre:** o app autenticou (`/users/me` e `/categories` deram 200), mas `/items`, `/products` e
+  `/sites/MLB` responderam 403 `PA_UNAUTHORIZED_RESULT_FROM_POLICIES`, e o suporte de desenvolvedores é um canal
+  "exclusivo para integradores certificados pelo Developer Partner Program". Pela regra acima, não procurei outro
+  endpoint para contornar.
+- **Pichau:** os termos só falam de bots na cláusula 6.1, sobre compra automatizada, mas a página de produto
+  respondeu 403 ao User-Agent identificável, então a loja saiu.
+
+Com uma loja só, o monitor não compara nada e os alertas gratuitos do Zoom/Buscapé e dos apps das lojas cobrem
+mais. Removidos: serviço, rota no Traefik, entrada no Blocky e a entrega dos segredos no `gitops-sync.sh`.
+Ficam de propósito: o volume `precos-data` no host (histórico da KaBuM; o `up --remove-orphans` não apaga volumes),
+os backups já enviados e os segredos `PRECOS_*` no `primary.env.age`, que podem ser limpos num PR à parte.
+O repositório do app foi apagado.

@@ -298,25 +298,6 @@ apply() {
       install -m 0640 -g 65534 /dev/stdin /etc/mgdn-platform/alertmanager/ntfy-noticias-url
   fi
 
-  # Segredos do monitor de preços (precos), em arquivos legíveis pelo usuário do container
-  # (nobody): o tópico secreto do ntfy, o ping do Healthchecks e o secret do app do Mercado
-  # Livre. O app só os lê no boot: valor novo pede restart. Sem valor, o arquivo fica vazio
-  # e o app desliga o envio correspondente.
-  local restart_precos=false
-  if has_service precos; then
-    install -d -m 0750 -g 65534 /etc/mgdn-platform/precos
-    local pair file value
-    for pair in "ntfy-url:${PRECOS_NTFY_URL:-}" "healthcheck-url:${PRECOS_HEALTHCHECK_URL:-}" \
-      "ml-client-secret:${PRECOS_ML_CLIENT_SECRET:-}"; do
-      file=/etc/mgdn-platform/precos/${pair%%:*}
-      value=${pair#*:}
-      if [[ -f "$file" && "$(cat "$file")" != "$value" ]]; then
-        restart_precos=true
-      fi
-      printf '%s\n' "$value" | install -m 0640 -g 65534 /dev/stdin "$file"
-    done
-  fi
-
   # VM nova (primeiro deploy): restaura os apps com dados (label mgdn.backup.volume,
   # ADR 0015) do backup mais recente antes de subi-los. O Headscale volta com os
   # aparelhos, que seguem na tailnet sem novo registro (ADR 0006).
@@ -332,10 +313,6 @@ apply() {
   if $restart_traefik; then
     log "token da Cloudflare mudou; reiniciando traefik"
     compose restart traefik
-  fi
-  if $restart_precos; then
-    log "segredo do precos mudou; reiniciando"
-    compose restart precos
   fi
   local svc
   for svc in $(compose config --services); do

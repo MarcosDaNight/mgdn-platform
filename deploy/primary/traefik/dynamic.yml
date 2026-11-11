@@ -35,13 +35,6 @@ http:
       middlewares: [tailnet-only, security-headers]
       tls:
         certResolver: cloudflare
-    precos:
-      rule: Host(`precos.mgdn.com.br`)
-      entryPoints: [websecure]
-      service: precos
-      middlewares: [tailnet-only, security-headers]
-      tls:
-        certResolver: cloudflare
 
   middlewares:
     tailnet-only:
@@ -78,7 +71,3 @@ http:
       loadBalancer:
         servers:
           - url: http://estudo:3000
-    precos:
-      loadBalancer:
-        servers:
-          - url: http://precos:8080

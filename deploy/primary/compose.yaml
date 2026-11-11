@@ -228,36 +228,6 @@ services:
     # Pico medido sob carga (700 requisições, heap limitado): 93 MB; limite = 1,5x o pico.
     mem_limit: 144m
 
-  # Monitor de preços do Switch 2 (ADR 0018, docs/precos.md). Só pela tailnet. Código em
-  # github.com/MarcosDaNight/mgdn-precos. A config (metas e URLs) mora em ./precos; editá-la
-  # reinicia o serviço. Segredos por arquivo (entregues pelo gitops-sync, ADR 0014).
-  precos:
-    image: ghcr.io/marcosdanight/mgdn-precos:735784d26cf0d31211162d6a38c78cfc0100474b@sha256:db5d284220404d25ea2c5ad7c271607175d90cb6e69395c6896b52de149251b8
-    restart: unless-stopped
-    # nobody: o mesmo grupo (65534) que lê os arquivos de segredo em /run/secrets.
-    user: "65534:65534"
-    environment:
-      PRECOS_CONFIG: /config/config.yaml
-      NTFY_URL_FILE: /run/secrets/ntfy-url
-      HEALTHCHECK_URL_FILE: /run/secrets/healthcheck-url
-      # App do Mercado Livre (leitura, sem PKCE). O client_id não é segredo; o secret vem por arquivo.
-      ML_CLIENT_ID: "3663211901414437"
-      ML_CLIENT_SECRET_FILE: /run/secrets/ml-client-secret
-    volumes:
-      - precos-data:/data
-      - ./precos:/config:ro
-      - /etc/mgdn-platform/precos:/run/secrets:ro
-    labels:
-      mgdn.url: https://precos.mgdn.com.br
-      mgdn.port: "8080"
-      mgdn.health: /healthz
-      mgdn.backup.volume: precos-data
-      mgdn.backup.ready: precos.sqlite
-      mgdn.summary: "precos.sqlite: select count(*) || ' leitura(s) em ' || count(distinct product_id) || ' produto(s)' from offer"
-    # Estimado, não medido em produção: ~36 MB de pico em 5 rodadas completas (páginas reais, offline) e
-    # ~32 MB em repouso com o painel. Folga deliberada até haver memory.peak real; reduzir depois.
-    mem_limit: 96m
-
 volumes:
   traefik-acme:
   vaultwarden-data:
@@ -271,4 +241,3 @@ volumes:
   alertmanager-data:
   freshrss-data:
   estudo-data:
-  precos-data:
