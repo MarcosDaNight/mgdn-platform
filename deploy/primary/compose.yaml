@@ -232,7 +232,7 @@ services:
   # github.com/MarcosDaNight/mgdn-precos. A config (metas e URLs) mora em ./precos; editá-la
   # reinicia o serviço. Segredos por arquivo (entregues pelo gitops-sync, ADR 0014).
   precos:
-    image: ghcr.io/marcosdanight/mgdn-precos:949791b6ef6052e71b6842658181b71108ee78ec@sha256:f43e3174c90c9a82a0443ab261fe2f158543c11b31d272639561ede96b3d76ec
+    image: ghcr.io/marcosdanight/mgdn-precos:8f5aa4d1073df1bae241ab534f66a0edcb89a51a@sha256:5a7801309dfc470cc4dc1b6fa2136a3a39e6ebb19f870b30f53d672ae4c68c72
     restart: unless-stopped
     # nobody: o mesmo grupo (65534) que lê os arquivos de segredo em /run/secrets.
     user: "65534:65534"
@@ -240,6 +240,8 @@ services:
       PRECOS_CONFIG: /config/config.yaml
       NTFY_URL_FILE: /run/secrets/ntfy-url
       HEALTHCHECK_URL_FILE: /run/secrets/healthcheck-url
+      # App do Mercado Livre (leitura, sem PKCE). O client_id não é segredo; o secret vem por arquivo.
+      ML_CLIENT_ID: "3663211901414437"
       ML_CLIENT_SECRET_FILE: /run/secrets/ml-client-secret
     volumes:
       - precos-data:/data
