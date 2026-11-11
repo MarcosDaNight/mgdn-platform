@@ -232,7 +232,7 @@ services:
   # github.com/MarcosDaNight/mgdn-precos. A config (metas e URLs) mora em ./precos; editá-la
   # reinicia o serviço. Segredos por arquivo (entregues pelo gitops-sync, ADR 0014).
   precos:
-    image: ghcr.io/marcosdanight/mgdn-precos:af6004915573b071cb1c2d2f71e56d6f38de85c2@sha256:23c69c2ff4fc15be67f4d8a5b2ec0712a687961188a0e2004059e9a43c978bd8
+    image: ghcr.io/marcosdanight/mgdn-precos:731dfe098c8d065bf0b09fea068380692fddb79d@sha256:a54c712c51f8970f7759dfff8801d3406408543f95b07b97418c75ff4398b184
     restart: unless-stopped
     # nobody: o mesmo grupo (65534) que lê os arquivos de segredo em /run/secrets.
     user: "65534:65534"
