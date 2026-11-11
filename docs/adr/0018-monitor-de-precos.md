@@ -28,6 +28,9 @@ quando um item chegar à meta ou ao menor preço, de forma confiável e **sem cu
 - **Só entra no histórico** o que é novo, vendido e entregue pela própria loja, físico (jogos) e com o
   título certo. Uma leitura muito abaixo da mediana espera a confirmação da leitura seguinte, para um erro de
   parser não gerar um falso "COMPRAR".
+- **Metas e parcelas:** a KaBuM informa Pix e parcelas sem juros; o Mercado Livre só o valor à vista. A meta
+  parcelada só vale para quem informa parcelas; numa loja que não informa, vale **só a meta Pix/à vista** (R$ 3.700
+  no console), e a mensagem do alerta diz isso.
 - **Notificação pelo ntfy**, em **tópico secreto próprio**, separado do Alertmanager (os avisos de compra não
   se misturam com alertas de infraestrutura). O tópico vem de segredo cifrado ([ADR 0014](0014-segredos-cifrados-no-repositorio.md)).
 - **Confiabilidade sem Prometheus nesta versão:** o `/healthz` vira 503 sem coleta bem-sucedida em 26 h (o
