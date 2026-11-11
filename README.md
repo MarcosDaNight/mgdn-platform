@@ -62,7 +62,6 @@ flowchart LR
       ab["Actual Budget"]
       fr["FreshRSS"]
       es["Timoneiro"]
-      pc["Preços"]
       b1["Blocky"]
       mon["Prometheus<br/>Grafana"]
     end
@@ -77,13 +76,12 @@ flowchart LR
   lan -. "secundário" .-> b2
   ts --> b1
   dev -. "controle<br/>headscale.mgdn.com.br" .-> tr
-  ts -- "vault / actual / freshrss / estudo / precos<br/>.mgdn.com.br" --> tr
+  ts -- "vault / actual / freshrss / estudo<br/>.mgdn.com.br" --> tr
   tr --> hs
   tr --> vw
   tr --> ab
   tr --> fr
   tr --> es
-  tr --> pc
   b1 -- "DoH" --> up["Cloudflare / Quad9"]
   b2 -- "DoH" --> up
   hs -. "backup horário" .-> bkp
@@ -91,7 +89,6 @@ flowchart LR
   ab -.-> bkp
   fr -.-> bkp
   es -.-> bkp
-  pc -.-> bkp
 ```
 
 | Componente | Onde | Papel |
@@ -103,7 +100,6 @@ flowchart LR
 | **Actual Budget** | principal | finanças pessoais em `actual.mgdn.com.br`, só pela tailnet ([ADR 0012](docs/adr/0012-actual-budget-e-dados-bancarios.md)) |
 | **FreshRSS** | principal | leitor de RSS em `freshrss.mgdn.com.br`, só pela tailnet ([como usar](docs/freshrss.md)) |
 | **Timoneiro** | principal | app de estudo (CKA e Linux), serviço `estudo`, em `estudo.mgdn.com.br`, só pela tailnet; imagem própria ([ADR 0016](docs/adr/0016-app-proprio-e-imagem-no-ghcr.md), [código](https://github.com/MarcosDaNight/mgdn-study)) |
-| **Preços** | principal | monitor de preços do Switch 2 em `precos.mgdn.com.br`, só pela tailnet; avisa no ntfy ([ADR 0018](docs/adr/0018-monitor-de-precos.md), [como usar](docs/precos.md)) |
 | **Prometheus, Alertmanager, Grafana, blackbox** | principal | métricas, SLO, alertas no celular (ntfy) e dashboards |
 | **node-exporter** | as duas VMs | métricas do host e do GitOps |
 | **Object Storage** | br-se1 | backups cifrados com object lock de 30 dias |
@@ -408,7 +404,7 @@ credenciais viraram issues automáticas (`.github/deadlines.yml`).
 | [0015](docs/adr/0015-contrato-de-app-por-labels.md) | Contrato de app por labels do Compose |
 | [0016](docs/adr/0016-app-proprio-e-imagem-no-ghcr.md) | App próprio (estudo) e imagem publicada no ghcr.io |
 | [0017](docs/adr/0017-principal-com-4gb.md) | VM principal com 4 GB de RAM |
-| [0018](docs/adr/0018-monitor-de-precos.md) | Monitor de preços (precos) |
+| [0018](docs/adr/0018-monitor-de-precos.md) | Monitor de preços (precos), encerrada |
 
 As fontes por trás de cada decisão (SRE, GitOps, Tailscale, Let's Encrypt etc.) estão em
 [`docs/referencias.md`](docs/referencias.md).
