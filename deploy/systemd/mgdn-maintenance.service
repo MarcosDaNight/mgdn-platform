@@ -1,8 +1,12 @@
 [Unit]
-Description=mgdn-platform: limpeza semanal de disco (cache do apt e journal)
+Description=mgdn-platform: limpeza semanal de disco (cache do apt, journal e imagens Docker sem uso)
 
 [Service]
 Type=oneshot
 # O unattended-upgrades guarda cada .deb baixado (AutocleanInterval=0 no Ubuntu).
 ExecStart=/usr/bin/apt-get clean
 ExecStart=/usr/bin/journalctl --vacuum-size=200M
+# Cada bump de imagem (Timoneiro, Dependabot, etc.) deixa a anterior no disco: o `compose up -d`
+# não as remove. Apaga as imagens que nenhum contêiner usa, menos as criadas na última semana
+# (a anterior continua à mão para um rollback). O "-" evita falhar a unit se o Docker estiver ocupado.
+ExecStart=-/usr/bin/docker image prune --all --force --filter until=168h
